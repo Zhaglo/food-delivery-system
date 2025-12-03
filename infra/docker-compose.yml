@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:14
+    container_name: food_delivery_db
+    environment:
+      POSTGRES_DB: food_delivery_db
+      POSTGRES_USER: food_user
+      POSTGRES_PASSWORD: food_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
