@@ -6,7 +6,7 @@ def restaurant_list(request):
         return JsonResponse({'detail': 'Method not allowed'}, status=405)
 
     restaurants = Restaurant.objects.all().values('id', 'name', 'address', 'description')
-    return JsonResponse(list(restaurants), safe=False)
+    return JsonResponse(list(restaurants), safe=False, json_dumps_params={'ensure_ascii': False})
 
 def restaurant_menu(request, restaurant_id):
     if request.method != 'GET':
@@ -30,5 +30,6 @@ def restaurant_menu(request, restaurant_id):
             },
             'menu': list(items),
         },
-        safe=False
+        safe=False,
+        json_dumps_params={'ensure_ascii': False}
     )

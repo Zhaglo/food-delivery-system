@@ -11,19 +11,55 @@ from restaurants.models import Restaurant, MenuItem
 
 
 @csrf_exempt
-def order_create(request):
-    if request.method != 'POST':
-        return JsonResponse({'detail': 'Method not allowed'}, status=405)
+def order_list_or_create(request):
+    if request.method == 'GET':
+        client_id = request.GET.get('client_id')
+        restaurant_id = request.GET.get('restaurant_id')
 
+        qs = Order.objects.select_related('client', 'restaurant').all()
+        if client_id:
+            qs = qs.filter(client_id=client_id)
+        if restaurant_id:
+            qs = qs.filter(restaurant_id=restaurant_id)
+
+        data = []
+        for order in qs.order_by('-created_at'):
+            data.append(
+                {
+                    'id': order.id,
+                    'status': order.status,
+                    'client_id': order.client.id,
+                    'restaurant_id': order.restaurant.id,
+                    'delivery_address': order.delivery_address,
+                    'total_price': order.total_price,
+                    'created_at': order.created_at.isoformat(),
+                }
+            )
+        return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False})
+
+    if request.method == 'POST':
+        return _order_create(request)
+
+    return JsonResponse({'detail': 'Method not allowed'}, status=405)
+
+
+def _parse_json(request):
     try:
-        data = json.loads(request.body.decode('utf-8'))
-    except json.decoder.JSONDecodeError:
+        return json.loads(request.body.decode('utf-8'))
+    except json.JSONDecodeError:
+        return None
+
+
+@csrf_exempt
+def _order_create(request):
+    data = _parse_json(request)
+    if data is None:
         return JsonResponse({'detail': 'Invalid JSON'}, status=400)
 
     required_fields = ['client_id', 'restaurant_id', 'delivery_address', 'items']
     for field in required_fields:
         if field not in data:
-            return JsonResponse({'detail': f'Missing field {field}'}, status=400)
+            return JsonResponse({'detail': f'Missing field: {field}'}, status=400)
 
     client_id = data['client_id']
     restaurant_id = data['restaurant_id']
@@ -112,7 +148,8 @@ def order_create(request):
             'created_at': order.created_at.isoformat(),
             'items': items_response,
         },
-        status=201
+        status=201,
+        json_dumps_params={'ensure_ascii': False}
     )
 
 def order_detail(request, order_id):
@@ -149,5 +186,39 @@ def order_detail(request, order_id):
             'total_price': str(order.total_price),
             'created_at': order.created_at.isoformat(),
             'items': items_response,
-        }
+        },
+        json_dumps_params={'ensure_ascii': False}
+    )
+
+
+@csrf_exempt
+def order_change_status(request, order_id):
+    if request.method != 'PATCH':
+        return JsonResponse({'detail': 'Method not allowed'}, status=405)
+
+    data = _parse_json(request)
+    if data is None:
+        return JsonResponse({'detail': 'Invalid JSON'}, status=400)
+
+    new_status = data.get('status')
+    if new_status not in Order.Status.values:
+        return JsonResponse(
+            {'detail': f'Invalid status. Allowed: {list(Order.Status.values)}'},
+            status=400
+        )
+
+    try:
+        order = Order.objects.get(pk=order_id)
+    except Order.DoesNotExist:
+        return Http404('Order not found')
+
+    order.status = new_status
+    order.save()
+
+    return JsonResponse(
+        {
+            'id': order.id,
+            'status': order.status,
+        },
+        json_dumps_params={'ensure_ascii': False}
     )
