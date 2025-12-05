@@ -11,47 +11,68 @@ function App() {
   const { user, logout, loading } = useAuth();
 
   return (
-    <div>
-      <header style={{ padding: "10px", borderBottom: "1px solid #ccc", marginBottom: 16 }}>
-        <Link to="/">Рестораны</Link>{" "}
-        {user && user.role === "CLIENT" && (
-          <>
-            | <Link to="/orders">Мои заказы</Link>
-          </>
-        )}
-        {user && user.role === "RESTAURANT" && (
-          <>
-            | <Link to="/restaurant/orders">Заказы ресторатора</Link>
-          </>
-        )}
-        {user && user.role === "COURIER" && (
-          <>
-            | <Link to="/courier/tasks">Задачи курьера</Link>
-          </>
-        )}
-        {" | "}
-        <Link to="/login">Вход</Link>
+    <div className="min-h-screen bg-slate-100">
+      <header className="bg-white border-b border-slate-200">
+        <div className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-4">
+            <Link to="/" className="text-lg font-semibold text-slate-900">
+              🍕 Food Delivery
+            </Link>
+            <nav className="hidden sm:flex items-center gap-3 text-sm text-slate-600">
+              <Link to="/" className="hover:text-slate-900">
+                Рестораны
+              </Link>
 
-        <span style={{ float: "right" }}>
-          {loading && <span>Проверка авторизации...</span>}
-          {!loading && user && (
-            <>
-              <span>
-                Вы вошли как <strong>{user.username}</strong> ({user.role})
-              </span>
-              <button
-                onClick={logout}
-                style={{ marginLeft: 8 }}
-              >
-                Выйти
-              </button>
-            </>
-          )}
-          {!loading && !user && <span>Не авторизован</span>}
-        </span>
+              {user?.role === "CLIENT" && (
+                <Link to="/orders" className="hover:text-slate-900">
+                  Мои заказы
+                </Link>
+              )}
+
+              {user?.role === "RESTAURANT" && (
+                <Link to="/restaurant/orders" className="hover:text-slate-900">
+                  Заказы ресторатора
+                </Link>
+              )}
+
+              {user?.role === "COURIER" && (
+                <Link to="/courier/tasks" className="hover:text-slate-900">
+                  Задачи курьера
+                </Link>
+              )}
+
+              <Link to="/login" className="hover:text-slate-900">
+                Вход
+              </Link>
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-3 text-sm">
+            {loading && <span className="text-slate-500">Проверка...</span>}
+            {!loading && user && (
+              <>
+                <span className="text-slate-700">
+                  <span className="font-medium">{user.username}</span>{" "}
+                  <span className="text-xs uppercase text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                    {user.role}
+                  </span>
+                </span>
+                <button
+                  onClick={logout}
+                  className="text-xs px-3 py-1 rounded border border-slate-300 hover:bg-slate-100"
+                >
+                  Выйти
+                </button>
+              </>
+            )}
+            {!loading && !user && (
+              <span className="text-slate-500 text-xs">Не авторизован</span>
+            )}
+          </div>
+        </div>
       </header>
 
-      <main style={{ padding: "10px" }}>
+      <main className="max-w-5xl mx-auto px-4 py-6">
         <Routes>
           <Route path="/" element={<RestaurantsPage />} />
           <Route path="/login" element={<LoginPage />} />

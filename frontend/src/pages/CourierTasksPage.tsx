@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { PageHeader } from "../components/PageHeader";
+import { Card } from "../components/Card";
+import { StatusBadge } from "../components/StatusBadge";
+import { Button } from "../components/Button";
 
 type Task = {
   id: number;
@@ -12,7 +16,7 @@ type Task = {
   delivery_address: string;
 };
 
-const TASK_STATUSES = ["PENDING", "IN_PROGRESS", "DELIVERED", "CANCELLED"];
+const TASK_STATUSES = ["PENDING", "ASSIGNED", "IN_PROGRESS", "DONE"];
 
 export default function CourierTasksPage() {
   const { user } = useAuth();
@@ -34,7 +38,7 @@ export default function CourierTasksPage() {
   }
 
   useEffect(() => {
-    if (user && user.role === "COURIER") {
+    if (user?.role === "COURIER") {
       loadTasks();
     }
   }, [user]);
@@ -53,32 +57,60 @@ export default function CourierTasksPage() {
   }
 
   return (
-    <div>
-      <h2>Задачи курьера</h2>
-      {loading && <div>Загрузка...</div>}
-      {error && <div style={{ color: "red" }}>{error}</div>}
+    <div className="space-y-4">
+      <PageHeader
+        title="Задачи курьера"
+        subtitle="Активные и завершенные задания по доставке."
+      />
 
-      <ul>
+      {loading && (
+        <div className="text-sm text-slate-500">Загрузка...</div>
+      )}
+      {error && (
+        <div className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-md">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-3">
         {tasks.map((t) => (
-          <li key={t.id} style={{ marginBottom: 12, borderBottom: "1px solid #ccc", paddingBottom: 8 }}>
-            <strong>Задача #{t.id}</strong> — заказ #{t.order_id} — {t.status}
-            <br />
-            Адрес доставки: {t.delivery_address}
-            <br />
-            <span>Статус: </span>
-            {TASK_STATUSES.map((st) => (
-              <button
-                key={st}
-                disabled={st === t.status}
-                onClick={() => changeStatus(t.id, st)}
-                style={{ marginRight: 4, marginTop: 4 }}
-              >
-                {st}
-              </button>
-            ))}
-          </li>
+          <Card key={t.id}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm text-slate-700">
+                Задача{" "}
+                <span className="font-semibold text-slate-900">#{t.id}</span>{" "}
+                — заказ #{t.order_id}
+              </div>
+              <StatusBadge status={t.status} kind="delivery" />
+            </div>
+            <div className="text-xs text-slate-500">
+              Ресторан ID: {t.restaurant_id}, Клиент ID: {t.client_id}
+            </div>
+            <div className="text-xs text-slate-500 mb-2">
+              Адрес доставки: {t.delivery_address}
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {TASK_STATUSES.map((st) => (
+                <Button
+                  key={st}
+                  size="sm"
+                  variant={st === t.status ? "ghost" : "primary"}
+                  disabled={st === t.status}
+                  onClick={() => changeStatus(t.id, st)}
+                >
+                  {st}
+                </Button>
+              ))}
+            </div>
+          </Card>
         ))}
-      </ul>
+        {!loading && !error && tasks.length === 0 && (
+          <div className="text-sm text-slate-500">
+            У вас сейчас нет задач доставки.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
