@@ -10,39 +10,6 @@ from orders.models import Order, OrderItem
 from restaurants.models import Restaurant, MenuItem
 
 
-@csrf_exempt
-def order_list_or_create(request):
-    if request.method == 'GET':
-        client_id = request.GET.get('client_id')
-        restaurant_id = request.GET.get('restaurant_id')
-
-        qs = Order.objects.select_related('client', 'restaurant').all()
-        if client_id:
-            qs = qs.filter(client_id=client_id)
-        if restaurant_id:
-            qs = qs.filter(restaurant_id=restaurant_id)
-
-        data = []
-        for order in qs.order_by('-created_at'):
-            data.append(
-                {
-                    'id': order.id,
-                    'status': order.status,
-                    'client_id': order.client.id,
-                    'restaurant_id': order.restaurant.id,
-                    'delivery_address': order.delivery_address,
-                    'total_price': order.total_price,
-                    'created_at': order.created_at.isoformat(),
-                }
-            )
-        return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False})
-
-    if request.method == 'POST':
-        return _order_create(request)
-
-    return JsonResponse({'detail': 'Method not allowed'}, status=405)
-
-
 def _parse_json(request):
     try:
         return json.loads(request.body.decode('utf-8'))
@@ -51,17 +18,61 @@ def _parse_json(request):
 
 
 @csrf_exempt
-def _order_create(request):
+def order_list_or_create(request):
+    user: User | None = request.user if request.user.is_authenticated else None
+
+    if request.method == 'GET':
+        if user is None:
+            return JsonResponse({'detail': 'Authentication required'}, status=401)
+
+        qs = Order.objects.select_related('client', 'restaurant').all()
+
+        if user.role == User.Roles.CLIENT:
+            qs = qs.filter(client=user)
+        elif user.role == User.Roles.RESTAURANT:
+            qs = qs.filter(restaurant__owner=user)
+        elif user.role == User.Roles.COURIER:
+            qs = qs.filter(delivery_task__courier__user=user)
+        else:
+            pass # Админ видит всё
+
+        data = []
+        for order in qs.order_by('-created_at'):
+            data.append(
+                {
+                    'id': order.id,
+                    'status': order.status,
+                    'client_id': order.client_id,
+                    'restaurant_id': order.restaurant_id,
+                    'delivery_address': order.delivery_address,
+                    'total_price': str(order.total_price),
+                    'created_at': order.created_at.isoformat(),
+                }
+            )
+        return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False})
+
+    if request.method == 'POST':
+        return _order_create(request, user)
+
+    return JsonResponse({'detail': 'Method not allowed'}, status=405)
+
+
+def _order_create(request, user: User | None):
+    if user is None or not request.user.is_authenticated:
+        return JsonResponse({'detail': 'Authentication required'}, status=401)
+
+    if user.role != User.Roles.CLIENT:
+        return JsonResponse({'detail': 'Only clients can create orders'}, status=403)
+
     data = _parse_json(request)
     if data is None:
         return JsonResponse({'detail': 'Invalid JSON'}, status=400)
 
-    required_fields = ['client_id', 'restaurant_id', 'delivery_address', 'items']
+    required_fields = ['restaurant_id', 'delivery_address', 'items']
     for field in required_fields:
         if field not in data:
             return JsonResponse({'detail': f'Missing field: {field}'}, status=400)
 
-    client_id = data['client_id']
     restaurant_id = data['restaurant_id']
     delivery_address = data['delivery_address']
     items_data = data['items']
@@ -70,18 +81,13 @@ def _order_create(request):
         return JsonResponse({'detail': 'Items must be a non-empty list'}, status=400)
 
     try:
-        client = User.objects.get(pk=client_id)
-    except User.DoesNotExist:
-        return JsonResponse({'detail': 'Client not found'}, status=404)
-
-    try:
         restaurant = Restaurant.objects.get(pk=restaurant_id)
     except Restaurant.DoesNotExist:
         return JsonResponse({'detail': 'Restaurant not found'}, status=404)
 
     with transaction.atomic():
         order = Order.objects.create(
-            client=client,
+            client=user,
             restaurant=restaurant,
             delivery_address=delivery_address,
             status=Order.Status.NEW,
@@ -141,8 +147,8 @@ def _order_create(request):
         {
             'id': order.id,
             'status': order.status,
-            'client_id': client.id,
-            'restaurant_id': restaurant.id,
+            'client_id': order.client.id,
+            'restaurant_id': order.restaurant.id,
             'delivery_address': order.delivery_address,
             'total_price': str(order.total_price),
             'created_at': order.created_at.isoformat(),
@@ -152,7 +158,7 @@ def _order_create(request):
         json_dumps_params={'ensure_ascii': False}
     )
 
-def order_detail(request, order_id):
+def order_detail(request, order_id: int):
     if request.method != 'GET':
         return JsonResponse({'detail': 'Method not allowed'}, status=405)
 
@@ -163,12 +169,25 @@ def order_detail(request, order_id):
     except Order.DoesNotExist:
         raise Http404('Order not found')
 
+    user: User | None = request.user if request.user.is_authenticated else None
+
+    if user is not None and user.role != User.Roles.ADMIN:
+        if user.role == User.Roles.CLIENT and order.client_id != user.id:
+            return JsonResponse({'detail': 'Forbidden'}, status=403)
+        if user.role == User.Roles.RESTAURANT and order.restaurant.owner_id != user.id:
+            return JsonResponse({'detail': 'Forbidden'}, status=403)
+        if user.role == User.Roles.COURIER:
+            if not hasattr(order, 'delivery_task') or order.delivery_task.courier is None:
+                return JsonResponse({'detail': 'Forbidden'}, status=403)
+            if order.delivery_task.courier.user_id != user.id:
+                return JsonResponse({'detail': 'Forbidden'}, status=403)
+
     items_response = []
     for item in order.items.all():
         items_response.append(
             {
                 'id': item.id,
-                'menu_item_id': item.menu_item_id,
+                'menu_item_id': item.menu_item.id,
                 'name': item.menu_item.name,
                 'quantity': item.quantity,
                 'price': str(item.price_at_moment),
@@ -192,9 +211,24 @@ def order_detail(request, order_id):
 
 
 @csrf_exempt
-def order_change_status(request, order_id):
+def order_change_status(request, order_id: int):
     if request.method != 'PATCH':
         return JsonResponse({'detail': 'Method not allowed'}, status=405)
+
+    user: User | None = request.user if request.user.is_authenticated else None
+    if user is None:
+        return JsonResponse({'detail': 'Authentication required'}, status=401)
+
+    try:
+        order = Order.objects.select_related('restaurant__owner').get(pk=order_id)
+    except Order.DoesNotExist:
+        raise Http404('Order not found')
+
+    if user.role not in (User.Roles.RESTAURANT, User.Roles.ADMIN):
+        return JsonResponse({'detail': 'Forbidden'}, status=403)
+
+    if user.role == User.Roles.RESTAURANT and order.restaurant.owner_id != user.id:
+        return JsonResponse({'detail': 'Forbidden'}, status=403)
 
     data = _parse_json(request)
     if data is None:
@@ -206,11 +240,6 @@ def order_change_status(request, order_id):
             {'detail': f'Invalid status. Allowed: {list(Order.Status.values)}'},
             status=400
         )
-
-    try:
-        order = Order.objects.get(pk=order_id)
-    except Order.DoesNotExist:
-        return Http404('Order not found')
 
     order.status = new_status
     order.save()
