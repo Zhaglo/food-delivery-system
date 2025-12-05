@@ -24,3 +24,7 @@ venv/
 *.pid
 postgres_data/
 infra_postgres_data/
+
+# Frontend build & deps
+frontend/node_modules/
+frontend/dist/
