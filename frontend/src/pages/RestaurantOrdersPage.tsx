@@ -124,6 +124,9 @@ export default function RestaurantOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [myRestaurants, setMyRestaurants] = useState<MyRestaurant[]>([]);
 
+  // фильтр по ресторану: "ALL" или id ресторана — ГЛОБАЛЬНЫЙ
+  const [restaurantFilter, setRestaurantFilter] = useState<"ALL" | number>("ALL");
+
   // фильтры для АКТИВНЫХ заказов (канбан)
   const [statusFilter, setStatusFilter] = useState<StatusType | "ALL">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -151,7 +154,13 @@ export default function RestaurantOrdersPage() {
   useEffect(() => {
     api
       .get("/restaurants/my/")
-      .then(setMyRestaurants)
+      .then((data: MyRestaurant[]) => {
+        setMyRestaurants(data);
+        // если есть только один ресторан — сразу выбрать его
+        if (data.length === 1) {
+          setRestaurantFilter(data[0].id);
+        }
+      })
       .catch(() => {
         // можно тихо игнорить
       });
@@ -186,9 +195,15 @@ export default function RestaurantOrdersPage() {
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const normalizedHistorySearch = historySearch.trim().toLowerCase();
 
+  // сначала фильтруем заказы по ресторану (ГЛОБАЛЬНЫЙ фильтр)
+  const ordersForView = useMemo(() => {
+    if (restaurantFilter === "ALL") return orders;
+    return orders.filter((o) => o.restaurant_id === restaurantFilter);
+  }, [orders, restaurantFilter]);
+
   // фильтрация заказов для КАНБАНА (только активные статусы)
   const filteredActiveOrders = useMemo(() => {
-    return orders.filter((o) => {
+    return ordersForView.filter((o) => {
       const st = o.status as StatusType;
       if (!ACTIVE_STATUSES.includes(st)) {
         return false;
@@ -216,7 +231,7 @@ export default function RestaurantOrdersPage() {
 
       return true;
     });
-  }, [orders, statusFilter, normalizedSearch]);
+  }, [ordersForView, statusFilter, normalizedSearch]);
 
   // группировка активных по статусам для канбана
   const groupedByStatus: Record<StatusType, Order[]> = useMemo(() => {
@@ -246,7 +261,7 @@ export default function RestaurantOrdersPage() {
     return result;
   }, [filteredActiveOrders]);
 
-  // счётчики по всем заказам (включая историю)
+  // счётчики по заказам с учётом выбранного ресторана
   const counters = useMemo(() => {
     const base: Record<StatusType, number> = {
       NEW: 0,
@@ -257,7 +272,7 @@ export default function RestaurantOrdersPage() {
       CANCELLED: 0,
     };
 
-    for (const o of orders) {
+    for (const o of ordersForView) {
       const st = o.status as StatusType;
       if (STATUSES.includes(st)) {
         base[st] += 1;
@@ -265,16 +280,16 @@ export default function RestaurantOrdersPage() {
     }
 
     return base;
-  }, [orders]);
+  }, [ordersForView]);
 
   // ===== История заказов (DELIVERED/CANCELLED) =====
 
   const historyOrders = useMemo(
     () =>
-      orders.filter((o) =>
+      ordersForView.filter((o) =>
         HISTORY_STATUSES.includes(o.status as StatusType),
       ),
-    [orders],
+    [ordersForView],
   );
 
   const filteredHistoryOrders = useMemo(() => {
@@ -345,27 +360,112 @@ export default function RestaurantOrdersPage() {
 
   // ===== Рендер =====
 
+  const currentRestaurantLabel =
+    restaurantFilter === "ALL"
+      ? "Все рестораны"
+      : myRestaurants.find((r) => r.id === restaurantFilter)?.name ||
+        `Ресторан #${restaurantFilter}`;
+
   return (
     <div className="space-y-4">
-      {/* Шапка ресторатора */}
+      {/* Шапка ресторатора + глобальный фильтр по ресторану */}
       {myRestaurants.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <h2 className="text-sm font-semibold text-slate-900 mb-2">
-            Мои рестораны
-          </h2>
-          <div className="flex flex-col gap-2">
-            {myRestaurants.map((r) => (
-              <div key={r.id} className="text-sm">
-                <div className="font-medium text-slate-900">{r.name}</div>
-                <div className="text-slate-500">{r.address}</div>
-                {r.description && (
-                  <div className="text-xs text-slate-400 mt-1">
-                    {r.description}
-                  </div>
-                )}
-              </div>
-            ))}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Панель ресторатора
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Сейчас показываются заказы:{" "}
+                <span className="font-medium text-slate-900">
+                  {currentRestaurantLabel}
+                </span>
+              </p>
+            </div>
+
+            {/* переключатель ресторана в виде табов-пилюль */}
+            <div className="flex flex-wrap gap-1 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setRestaurantFilter("ALL")}
+                className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                  restaurantFilter === "ALL"
+                    ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                Все рестораны
+              </button>
+              {myRestaurants.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setRestaurantFilter(r.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs border transition-colors max-w-[180px] truncate ${
+                    restaurantFilter !== "ALL" && restaurantFilter === r.id
+                      ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                  title={r.name}
+                >
+                  {r.name}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* карточка выбранного ресторана (или всех, если ALL) */}
+          {restaurantFilter === "ALL" ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {myRestaurants.map((r) => (
+                <div
+                  key={r.id}
+                  className="text-sm p-3 rounded-lg border border-slate-200 bg-slate-50"
+                >
+                  <div className="font-medium text-slate-900 flex items-center justify-between gap-2">
+                    <span className="truncate">{r.name}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                      ID: {r.id}
+                    </span>
+                  </div>
+                  <div className="text-slate-500 text-xs mt-1 truncate">
+                    {r.address}
+                  </div>
+                  {r.description && (
+                    <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                      {r.description}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            (() => {
+              const selected = myRestaurants.find(
+                (r) => r.id === restaurantFilter,
+              );
+              if (!selected) return null;
+              return (
+                <div className="text-sm p-3 rounded-lg border border-blue-200 bg-blue-50">
+                  <div className="font-medium text-slate-900 flex items-center justify-between gap-2">
+                    <span className="truncate">{selected.name}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600 text-white">
+                      Активный ресторан
+                    </span>
+                  </div>
+                  <div className="text-slate-600 text-xs mt-1">
+                    {selected.address}
+                  </div>
+                  {selected.description && (
+                    <div className="text-[11px] text-slate-500 mt-1">
+                      {selected.description}
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          )}
         </div>
       )}
 
@@ -419,7 +519,9 @@ export default function RestaurantOrdersPage() {
           </select>
 
           <div className="flex items-center text-xs text-slate-500">
-            {loading ? "Загрузка данных..." : `Всего заказов: ${orders.length}`}
+            {loading
+              ? "Загрузка данных..."
+              : `Всего заказов: ${ordersForView.length}`}
           </div>
         </div>
       </div>
@@ -705,9 +807,9 @@ export default function RestaurantOrdersPage() {
         )}
       </div>
 
-      {!loading && !error && orders.length === 0 && (
+      {!loading && !error && ordersForView.length === 0 && (
         <div className="text-sm text-slate-500">
-          Для ваших ресторанов пока нет заказов.
+          Для выбранного ресторана пока нет заказов.
         </div>
       )}
     </div>
