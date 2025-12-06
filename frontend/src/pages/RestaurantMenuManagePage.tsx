@@ -8,12 +8,19 @@ type MyRestaurant = {
   description: string;
 };
 
+type MenuSection = {
+  id: number;
+  name: string;
+  ordering: number;
+};
+
 type MenuItem = {
   id: number;
   name: string;
   description: string;
   price: string;
   is_available: boolean;
+  section_id?: number | null;
 };
 
 export default function RestaurantMenuManagePage() {
@@ -28,6 +35,20 @@ export default function RestaurantMenuManagePage() {
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newPrice, setNewPrice] = useState("");
+
+  const [sections, setSections] = useState<MenuSection[]>([]);
+  const [newSectionName, setNewSectionName] = useState("");
+  const [newSectionOrdering, setNewSectionOrdering] = useState("");
+  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null); // для нового блюда
+
+  // фильтры / поиск / сортировка / группировка
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterSectionId, setFilterSectionId] = useState<string>("all"); // "all" | "no-section" | id как строка
+  const [filterAvailability, setFilterAvailability] =
+    useState<"all" | "available" | "unavailable">("all");
+  const [groupBySection, setGroupBySection] = useState(true);
+  const [sortBy, setSortBy] = useState<"name" | "price">("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
     api
@@ -62,6 +83,23 @@ export default function RestaurantMenuManagePage() {
       .finally(() => setLoading(false));
   }, [selectedRestaurantId]);
 
+  useEffect(() => {
+    if (!selectedRestaurantId) {
+      setSections([]);
+      return;
+    }
+
+    api
+      .get(`/restaurants/${selectedRestaurantId}/sections/`)
+      .then((data) => {
+        setSections(data);
+        setError(null);
+      })
+      .catch(() => {
+        setError("Ошибка загрузки разделов меню");
+      });
+  }, [selectedRestaurantId]);
+
   async function handleAddItem() {
     if (!selectedRestaurantId) return;
     if (!newName || !newPrice) {
@@ -77,6 +115,7 @@ export default function RestaurantMenuManagePage() {
           description: newDescription,
           price: newPrice,
           is_available: true,
+          section_id: selectedSectionId,
         },
       );
       setMenu((prev) => [...prev, item]);
@@ -119,6 +158,171 @@ export default function RestaurantMenuManagePage() {
       setError(err?.data?.detail || "Ошибка обновления позиции");
     }
   }
+
+  async function handleCreateSection() {
+    if (!selectedRestaurantId) return;
+    if (!newSectionName.trim()) {
+      setError("Введите название раздела");
+      return;
+    }
+
+    try {
+      const section = await api.post(
+        `/restaurants/${selectedRestaurantId}/sections/`,
+        {
+          name: newSectionName,
+          ordering: newSectionOrdering ? Number(newSectionOrdering) : 0,
+        },
+      );
+      setSections((prev) => [...prev, section]);
+      setNewSectionName("");
+      setNewSectionOrdering("");
+      setError(null);
+    } catch (err: any) {
+      setError(err?.data?.detail || "Ошибка создания раздела");
+    }
+  }
+
+  async function handleChangeItemSection(id: number, sectionId: number | null) {
+    if (!selectedRestaurantId) return;
+
+    try {
+      const updated = await api.patch(
+        `/restaurants/${selectedRestaurantId}/menu/manage/${id}/`,
+        {
+          section_id: sectionId,
+        },
+      );
+      setMenu((prev) => prev.map((m) => (m.id === id ? updated : m)));
+      setError(null);
+    } catch (err: any) {
+      setError(err?.data?.detail || "Ошибка изменения раздела позиции");
+    }
+  }
+
+  // === Вспомогательная логика для фильтрации/сортировки ===
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const filteredAndSortedMenu: MenuItem[] = [...menu]
+    .filter((item) => {
+      // поиск по названию и описанию
+      if (normalizedSearch) {
+        const haystack = (
+          (item.name || "") +
+          " " +
+          (item.description || "")
+        ).toLowerCase();
+        if (!haystack.includes(normalizedSearch)) {
+          return false;
+        }
+      }
+
+      // фильтр по разделу
+      if (filterSectionId === "no-section") {
+        if (item.section_id !== null && item.section_id !== undefined) return false;
+      } else if (filterSectionId !== "all") {
+        const secId = Number(filterSectionId);
+        if (item.section_id !== secId) return false;
+      }
+
+      // фильтр по доступности
+      if (filterAvailability === "available" && !item.is_available) return false;
+      if (filterAvailability === "unavailable" && item.is_available) return false;
+
+      return true;
+    })
+    .sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "name") {
+        cmp = a.name.localeCompare(b.name);
+      } else if (sortBy === "price") {
+        const pa = Number(a.price);
+        const pb = Number(b.price);
+        cmp = pa === pb ? 0 : pa < pb ? -1 : 1;
+      }
+
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+
+  function renderMenuItem(item: MenuItem) {
+    const section = item.section_id
+      ? sections.find((s) => s.id === item.section_id)
+      : null;
+
+    return (
+      <div
+        key={item.id}
+        className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0 text-sm gap-2"
+      >
+        <div>
+          <div className="font-medium text-slate-900">
+            {item.name}{" "}
+            {!item.is_available && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                выключено
+              </span>
+            )}
+          </div>
+
+
+
+          {item.description && (
+            <div className="text-xs text-slate-500">
+              {item.description}
+            </div>
+          )}
+
+          {/* селект для смены раздела */}
+          {sections.length > 0 && (
+            <div className="mt-1">
+              <select
+                className="px-2 py-1 border border-slate-300 rounded-md text-xs"
+                value={item.section_id ?? ""}
+                onChange={(e) =>
+                  handleChangeItemSection(
+                    item.id,
+                    e.target.value ? Number(e.target.value) : null,
+                  )
+                }
+              >
+                <option value="">Без раздела</option>
+                {sections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-slate-900">
+            {item.price} ₽
+          </div>
+          <button
+            onClick={() => handleToggleAvailability(item.id)}
+            className="text-xs text-slate-600 hover:text-slate-900"
+          >
+            {item.is_available ? "Выключить" : "Включить"}
+          </button>
+          <button
+            onClick={() => handleDeleteItem(item.id)}
+            className="text-xs text-red-600 hover:text-red-700"
+          >
+            Удалить
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Для группировки: список всех "разделов", включая псевдо-раздел "без раздела"
+  const sectionsForGrouping: { id: number | null; name: string }[] = [
+    { id: null, name: "Без раздела" },
+    ...sections.map((s) => ({ id: s.id, name: s.name })),
+  ];
 
   const selectedRestaurant = restaurants.find((r) => r.id === selectedRestaurantId);
 
@@ -181,6 +385,53 @@ export default function RestaurantMenuManagePage() {
         </div>
       )}
 
+      {/* Разделы меню */}
+      {selectedRestaurantId && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Разделы меню
+          </h2>
+
+          {sections.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {sections.map((s) => (
+                <span
+                  key={s.id}
+                  className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-slate-100 text-xs text-slate-700"
+                >
+                  {s.name}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-slate-500">
+              Разделы ещё не созданы.
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <input
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+              placeholder="Название раздела"
+              value={newSectionName}
+              onChange={(e) => setNewSectionName(e.target.value)}
+            />
+            <input
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+              placeholder="Порядок (необязательно)"
+              value={newSectionOrdering}
+              onChange={(e) => setNewSectionOrdering(e.target.value)}
+            />
+            <button
+              onClick={handleCreateSection}
+              className="inline-flex justify-center items-center px-4 py-2 rounded-md bg-slate-800 text-white text-sm font-medium hover:bg-slate-900 transition-colors"
+            >
+              Добавить раздел
+            </button>
+          </div>
+        </div>
+      )}
+
       {selectedRestaurantId && (
         <>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
@@ -206,6 +457,20 @@ export default function RestaurantMenuManagePage() {
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
               />
+              <select
+                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+                value={selectedSectionId ?? ""}
+                onChange={(e) =>
+                  setSelectedSectionId(e.target.value ? Number(e.target.value) : null)
+                }
+              >
+                <option value="">Без раздела</option>
+                {sections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <button
               onClick={handleAddItem}
@@ -216,57 +481,112 @@ export default function RestaurantMenuManagePage() {
             </button>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                    {/* Панель фильтров / поиска / сортировки */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+            <h2 className="text-sm font-semibold text-slate-900">
+              Фильтрация и поиск
+            </h2>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+              <input
+                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+                placeholder="Поиск по названию или описанию"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <select
+                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+                value={filterSectionId}
+                onChange={(e) => setFilterSectionId(e.target.value)}
+              >
+                <option value="all">Все разделы</option>
+                <option value="no-section">Без раздела</option>
+                {sections.map((s) => (
+                  <option key={s.id} value={s.id.toString()}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+                value={filterAvailability}
+                onChange={(e) =>
+                  setFilterAvailability(
+                    e.target.value as "all" | "available" | "unavailable",
+                  )
+                }
+              >
+                <option value="all">Доступность: все</option>
+                <option value="available">Только доступные</option>
+                <option value="unavailable">Только выключенные</option>
+              </select>
+              <div className="flex items-center gap-2">
+                <select
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm"
+                  value={sortBy}
+                  onChange={(e) =>
+                    setSortBy(e.target.value as "name" | "price")
+                  }
+                >
+                  <option value="name">Сортировать по названию</option>
+                  <option value="price">Сортировать по цене</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSortDir((prev) => (prev === "asc" ? "desc" : "asc"))
+                  }
+                  className="px-2 py-2 border border-slate-300 rounded-md text-xs"
+                  title="Сменить направление сортировки"
+                >
+                  {sortDir === "asc" ? "↑" : "↓"}
+                </button>
+              </div>
+            </div>
+
+            <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+              <input
+                type="checkbox"
+                className="rounded border-slate-300"
+                checked={groupBySection}
+                onChange={(e) => setGroupBySection(e.target.checked)}
+              />
+              <span>Группировать по разделам</span>
+            </label>
+          </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <h2 className="text-sm font-semibold text-slate-900 mb-2">
               Текущее меню
             </h2>
             {loading ? (
               <div className="text-sm text-slate-500">Загрузка меню...</div>
-            ) : menu.length === 0 ? (
+            ) : filteredAndSortedMenu.length === 0 ? (
               <div className="text-sm text-slate-500">
-                Меню пока пусто.
+                Ничего не найдено по выбранным фильтрам.
+              </div>
+            ) : groupBySection ? (
+              <div className="space-y-4">
+                {sectionsForGrouping.map((sec) => {
+                  const items = filteredAndSortedMenu.filter(
+                    (item) => (item.section_id ?? null) === sec.id,
+                  );
+                  if (items.length === 0) return null;
+
+                  return (
+                    <div key={sec.id ?? "no-section"} className="space-y-2">
+                      <div className="text-xs font-semibold text-slate-500 uppercase">
+                        {sec.name}
+                      </div>
+                      <div className="space-y-2">
+                        {items.map((item) => renderMenuItem(item))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="space-y-2">
-                {menu.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0 text-sm"
-                  >
-                    <div>
-                      <div className="font-medium text-slate-900">
-                        {item.name}{" "}
-                        {!item.is_available && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
-                            выключено
-                          </span>
-                        )}
-                      </div>
-                      {item.description && (
-                        <div className="text-xs text-slate-500">
-                          {item.description}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-sm text-slate-900">
-                        {item.price} ₽
-                      </div>
-                      <button
-                        onClick={() => handleToggleAvailability(item.id)}
-                        className="text-xs text-slate-600 hover:text-slate-900"
-                      >
-                        {item.is_available ? "Выключить" : "Включить"}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="text-xs text-red-600 hover:text-red-700"
-                      >
-                        Удалить
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                {filteredAndSortedMenu.map((item) => renderMenuItem(item))}
               </div>
             )}
           </div>

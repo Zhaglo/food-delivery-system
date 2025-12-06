@@ -15,11 +15,35 @@ class Restaurant(models.Model):
         return self.name
 
 
+class MenuSection(models.Model):
+    restaurant = models.ForeignKey(
+        Restaurant,
+        on_delete=models.CASCADE,
+        related_name="menu_sections",
+    )
+    name = models.CharField("Название раздела", max_length=255)
+    ordering = models.PositiveIntegerField("Порядок", default=0)
+
+    class Meta:
+        ordering = ["ordering", "id"]
+
+    def __str__(self):
+        return f"{self.restaurant.name}: {self.name}"
+
+
 class MenuItem(models.Model):
     restaurant = models.ForeignKey(
         Restaurant,
         on_delete=models.CASCADE,
         related_name='menu_items',
+    )
+    section = models.ForeignKey(
+        MenuSection,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='items',
+        verbose_name='Раздел меню',
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)

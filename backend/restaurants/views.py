@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, Http404
 
-from .models import Restaurant, MenuItem, RestaurantApplication
+from .models import Restaurant, MenuItem, MenuSection, RestaurantApplication
 from users.models import User
 
 
@@ -34,7 +34,7 @@ def restaurant_menu(request, restaurant_id):
         raise Http404('Restaurant not found')
 
     items = restaurant.menu_items.all().values(
-        'id', 'name', 'description', 'price', 'is_available'
+        'id', 'name', 'description', 'price', 'section_id', 'is_available'
     )
 
     return JsonResponse(
@@ -146,6 +146,7 @@ def restaurant_menu_manage(request, restaurant_id: int):
     description = (data.get('description') or '').strip()
     price_raw = data.get('price')
     is_available = bool(data.get('is_available', True))
+    section_id = data.get('section_id')
 
     if not name or price_raw is None:
         return JsonResponse({'detail': 'name и price обязательны'}, status=400)
@@ -155,8 +156,16 @@ def restaurant_menu_manage(request, restaurant_id: int):
     except Exception:
         return JsonResponse({'detail': 'Некорректная цена'}, status=400)
 
+    section = None
+    if section_id is not None:
+        try:
+            section = MenuSection.objects.get(pk=section_id, restaurant=restaurant)
+        except MenuSection.DoesNotExist:
+            return JsonResponse({'detail': 'Section not found'}, status=404)
+
     item = MenuItem.objects.create(
         restaurant=restaurant,
+        section=section,
         name=name,
         description=description,
         price=price,
@@ -166,6 +175,7 @@ def restaurant_menu_manage(request, restaurant_id: int):
     return JsonResponse(
         {
             'id': item.id,
+            'section_id': item.section_id,
             'name': item.name,
             'description': item.description,
             'price': str(item.price),
@@ -221,12 +231,23 @@ def restaurant_menu_item_manage(request, restaurant_id: int, item_id: int):
                 item.price = Decimal(str(data['price']))
             except Exception:
                 return JsonResponse({'detail': 'Некорректная цена'}, status=400)
+        if 'section_id' in data:
+            section_id = data['section_id']
+            if section_id is None:
+                item.section = None
+            else:
+                try:
+                    section = MenuSection.objects.get(pk=section_id, restaurant=restaurant)
+                except MenuSection.DoesNotExist:
+                    return JsonResponse({'detail': 'Section not found'}, status=404)
+                item.section = section
 
         item.save()
 
         return JsonResponse(
             {
                 'id': item.id,
+                'section_id': item.section_id,
                 'name': item.name,
                 'description': item.description,
                 'price': str(item.price),
@@ -236,3 +257,103 @@ def restaurant_menu_item_manage(request, restaurant_id: int, item_id: int):
         )
 
     return JsonResponse({'detail': 'Method not allowed'}, status=405)
+
+
+@login_required
+@csrf_exempt
+def restaurant_sections_manage(request, restaurant_id: int):
+    """
+    GET: список разделов ресторана
+    POST: создать раздел
+    """
+    user: User = request.user  # type: ignore
+
+    if user.role not in (User.Roles.RESTAURANT, User.Roles.ADMIN):
+        return JsonResponse({"detail": "Forbidden"}, status=403)
+
+    try:
+        restaurant = Restaurant.objects.get(pk=restaurant_id)
+    except Restaurant.DoesNotExist:
+        return JsonResponse({"detail": "Restaurant not found"}, status=404)
+
+    if user.role == User.Roles.RESTAURANT and restaurant.owner_id != user.id:
+        return JsonResponse({"detail": "Forbidden"}, status=403)
+
+    if request.method == "GET":
+        sections = restaurant.menu_sections.all().values("id", "name", "ordering")
+        return JsonResponse(list(sections), safe=False, json_dumps_params={"ensure_ascii": False})
+
+    if request.method == "POST":
+        data = _parse_json(request)
+        if data is None:
+            return JsonResponse({"detail": "Invalid JSON"}, status=400)
+
+        name = (data.get("name") or "").strip()
+        ordering = data.get("ordering") or 0
+
+        if not name:
+            return JsonResponse({"detail": "name обязателен"}, status=400)
+
+        section = MenuSection.objects.create(
+            restaurant=restaurant,
+            name=name,
+            ordering=ordering,
+        )
+
+        return JsonResponse(
+            {"id": section.id, "name": section.name, "ordering": section.ordering},
+            status=201,
+            json_dumps_params={"ensure_ascii": False},
+        )
+
+    return JsonResponse({"detail": "Method not allowed"}, status=405)
+
+
+@login_required
+@csrf_exempt
+def restaurant_section_item_manage(request, restaurant_id: int, section_id: int):
+    """
+    PATCH: обновить раздел (например имя)
+    DELETE: удалить раздел (позиции останутся без раздела)
+    """
+    user: User = request.user  # type: ignore
+
+    if user.role not in (User.Roles.RESTAURANT, User.Roles.ADMIN):
+        return JsonResponse({"detail": "Forbidden"}, status=403)
+
+    try:
+        restaurant = Restaurant.objects.get(pk=restaurant_id)
+    except Restaurant.DoesNotExist:
+        return JsonResponse({"detail": "Restaurant not found"}, status=404)
+
+    if user.role == User.Roles.RESTAURANT and restaurant.owner_id != user.id:
+        return JsonResponse({"detail": "Forbidden"}, status=403)
+
+    try:
+        section = MenuSection.objects.get(pk=section_id, restaurant=restaurant)
+    except MenuSection.DoesNotExist:
+        return JsonResponse({"detail": "Section not found"}, status=404)
+
+    if request.method == "DELETE":
+        # Отвязываем блюда от раздела, но не удаляем сами блюда
+        MenuItem.objects.filter(section=section).update(section=None)
+        section.delete()
+        return JsonResponse({"detail": "Deleted"}, status=204)
+
+    if request.method == "PATCH":
+        data = _parse_json(request)
+        if data is None:
+            return JsonResponse({"detail": "Invalid JSON"}, status=400)
+
+        if "name" in data:
+            section.name = (data["name"] or "").strip()
+        if "ordering" in data:
+            section.ordering = int(data["ordering"] or 0)
+        section.save()
+
+        return JsonResponse(
+            {"id": section.id, "name": section.name, "ordering": section.ordering},
+            json_dumps_params={"ensure_ascii": False},
+        )
+
+    return JsonResponse({"detail": "Method not allowed"}, status=405)
