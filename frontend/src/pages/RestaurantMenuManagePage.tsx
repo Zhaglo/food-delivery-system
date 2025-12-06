@@ -50,6 +50,13 @@ export default function RestaurantMenuManagePage() {
   const [sortBy, setSortBy] = useState<"name" | "price">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
+  // редактирование существующей позиции
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editSectionId, setEditSectionId] = useState<number | null>(null);
+
   useEffect(() => {
     api
       .get("/restaurants/my/")
@@ -183,20 +190,44 @@ export default function RestaurantMenuManagePage() {
     }
   }
 
-  async function handleChangeItemSection(id: number, sectionId: number | null) {
+  function startEditItem(item: MenuItem) {
+    setEditingItemId(item.id);
+    setEditName(item.name);
+    setEditDescription(item.description || "");
+    setEditPrice(item.price.toString());
+    setEditSectionId(item.section_id ?? null);
+  }
+
+  function cancelEditItem() {
+    setEditingItemId(null);
+    setEditName("");
+    setEditDescription("");
+    setEditPrice("");
+    setEditSectionId(null);
+  }
+
+  async function saveEditItem(id: number) {
     if (!selectedRestaurantId) return;
+    if (!editName || !editPrice) {
+      setError("Название и цена обязательны");
+      return;
+    }
 
     try {
       const updated = await api.patch(
         `/restaurants/${selectedRestaurantId}/menu/manage/${id}/`,
         {
-          section_id: sectionId,
+          name: editName,
+          description: editDescription,
+          price: editPrice,
+          section_id: editSectionId,
         },
       );
       setMenu((prev) => prev.map((m) => (m.id === id ? updated : m)));
       setError(null);
+      cancelEditItem();
     } catch (err: any) {
-      setError(err?.data?.detail || "Ошибка изменения раздела позиции");
+      setError(err?.data?.detail || "Ошибка сохранения изменений");
     }
   }
 
@@ -245,11 +276,80 @@ export default function RestaurantMenuManagePage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
 
-  function renderMenuItem(item: MenuItem) {
+    function renderMenuItem(item: MenuItem) {
     const section = item.section_id
       ? sections.find((s) => s.id === item.section_id)
       : null;
 
+    const isEditing = editingItemId === item.id;
+
+    if (isEditing) {
+      return (
+        <div
+          key={item.id}
+          className="border border-blue-200 bg-blue-50/40 rounded-lg p-3 space-y-2 text-sm"
+        >
+          <div className="font-semibold text-slate-900">
+            Редактирование позиции #{item.id}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <input
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+              placeholder="Название"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+            />
+            <input
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+              placeholder="Цена, ₽"
+              value={editPrice}
+              onChange={(e) => setEditPrice(e.target.value)}
+            />
+            <input
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+              placeholder="Описание (необязательно)"
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+            />
+            <select
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+              value={editSectionId ?? ""}
+              onChange={(e) =>
+                setEditSectionId(e.target.value ? Number(e.target.value) : null)
+              }
+            >
+              <option value="">Без раздела</option>
+              {sections.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => saveEditItem(item.id)}
+              className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700"
+            >
+              Сохранить
+            </button>
+            <button
+              onClick={cancelEditItem}
+              className="px-3 py-1.5 rounded-md border border-slate-300 text-xs text-slate-700 hover:bg-slate-50"
+            >
+              Отмена
+            </button>
+            <span className="ml-auto text-xs text-slate-500">
+              Текущий статус:{" "}
+              {item.is_available ? "доступно" : "выключено"}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // обычный (не в режиме редактирования) вид
     return (
       <div
         key={item.id}
@@ -265,34 +365,9 @@ export default function RestaurantMenuManagePage() {
             )}
           </div>
 
-
-
           {item.description && (
             <div className="text-xs text-slate-500">
               {item.description}
-            </div>
-          )}
-
-          {/* селект для смены раздела */}
-          {sections.length > 0 && (
-            <div className="mt-1">
-              <select
-                className="px-2 py-1 border border-slate-300 rounded-md text-xs"
-                value={item.section_id ?? ""}
-                onChange={(e) =>
-                  handleChangeItemSection(
-                    item.id,
-                    e.target.value ? Number(e.target.value) : null,
-                  )
-                }
-              >
-                <option value="">Без раздела</option>
-                {sections.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
             </div>
           )}
         </div>
@@ -306,6 +381,12 @@ export default function RestaurantMenuManagePage() {
             className="text-xs text-slate-600 hover:text-slate-900"
           >
             {item.is_available ? "Выключить" : "Включить"}
+          </button>
+          <button
+            onClick={() => startEditItem(item)}
+            className="text-xs text-blue-600 hover:text-blue-700"
+          >
+            Редактировать
           </button>
           <button
             onClick={() => handleDeleteItem(item.id)}
@@ -481,7 +562,7 @@ export default function RestaurantMenuManagePage() {
             </button>
           </div>
 
-                    {/* Панель фильтров / поиска / сортировки */}
+          {/* Панель фильтров / поиска / сортировки */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
             <h2 className="text-sm font-semibold text-slate-900">
               Фильтрация и поиск
@@ -554,7 +635,7 @@ export default function RestaurantMenuManagePage() {
             </label>
           </div>
 
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <h2 className="text-sm font-semibold text-slate-900 mb-2">
               Текущее меню
             </h2>
