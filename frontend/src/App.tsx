@@ -10,6 +10,8 @@ import RestaurantOrdersPage from "./pages/RestaurantOrdersPage";
 import CourierTasksPage from "./pages/CourierTasksPage";
 import CourierApplicationPage from './pages/CourierApplicationPage';
 import RestaurantApplicationPage from "./pages/RestaurantApplicationPage";
+import RestaurantOrderDetailPage from "./pages/RestaurantOrderDetailPage";
+import RestaurantMenuManagePage from "./pages/RestaurantMenuManagePage";
 import { useAuth } from "./auth/AuthContext";
 import { RequireRole } from "./components/RequireRole";
 import RedirectHomeByRole from "./components/RedirectHomeByRole";
@@ -84,19 +86,33 @@ function App() {
                 </>
               )}
 
-              {/* Ресторатор: только заказы ресторатора */}
+              {/* Ресторатор: заказы + управление меню */}
               {user?.role === "RESTAURANT" && (
-                <Link
-                  to="/restaurant/orders"
-                  className={`${navLink} ${
-                    isActive("/restaurant/orders")
-                      ? "bg-slate-100 text-slate-900"
-                      : "hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <Store className="h-4 w-4" />
-                  <span>Заказы ресторатора</span>
-                </Link>
+                <>
+                  <Link
+                    to="/restaurant/orders"
+                    className={`${navLink} ${
+                      isActive("/restaurant/orders")
+                        ? "bg-slate-100 text-slate-900"
+                        : "hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <Store className="h-4 w-4" />
+                    <span>Заказы ресторатора</span>
+                  </Link>
+
+                  <Link
+                    to="/restaurant/menu"
+                    className={`${navLink} ${
+                      isActive("/restaurant/menu")
+                        ? "bg-slate-100 text-slate-900"
+                        : "hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <UtensilsCrossed className="h-4 w-4" />
+                    <span>Меню ресторана</span>
+                  </Link>
+                </>
               )}
 
               {/* Курьер: только задачи */}
@@ -214,6 +230,24 @@ function App() {
                 <RestaurantOrdersPage />
               </RequireRole>
             }
+          />
+
+          <Route
+              path="/restaurant/orders/:id"
+              element={
+                <RequireRole allowed={["RESTAURANT", "ADMIN"]}>
+                  <RestaurantOrderDetailPage />
+                </RequireRole>
+              }
+          />
+
+          <Route
+              path="/restaurant/menu"
+              element={
+                <RequireRole allowed={["RESTAURANT", "ADMIN"]}>
+                  <RestaurantMenuManagePage />
+                </RequireRole>
+              }
           />
 
           {/* Задачи курьера — только курьер (и админ, если есть) */}

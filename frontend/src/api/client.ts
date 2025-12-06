@@ -26,4 +26,6 @@ export const api = {
     apiFetch(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   patch: (path: string, body?: unknown) =>
     apiFetch(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
+  delete: (path: string) =>
+    apiFetch(path, {method: "DELETE"}),
 };

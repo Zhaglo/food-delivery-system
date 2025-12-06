@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { Link } from "react-router-dom";
 
 type Order = {
   id: number;
@@ -10,6 +11,13 @@ type Order = {
   delivery_address: string;
   total_price: string;
   created_at: string;
+};
+
+type MyRestaurant = {
+  id: number;
+  name: string;
+  address: string;
+  description: string;
 };
 
 const POSSIBLE_STATUSES = ["NEW", "COOKING", "READY", "ON_DELIVERY", "DELIVERED", "CANCELLED"];
@@ -39,6 +47,7 @@ export default function RestaurantOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [myRestaurants, setMyRestaurants] = useState<MyRestaurant[]>([]);
 
   async function loadOrders() {
     try {
@@ -52,6 +61,15 @@ export default function RestaurantOrdersPage() {
       setLoading(false);
     }
   }
+
+    useEffect(() => {
+        api
+          .get("/restaurants/my/")
+          .then(setMyRestaurants)
+          .catch(() => {
+            // можно тихо игнорить, если что-то пошло не так
+          });
+      }, []);
 
   useEffect(() => {
     if (user?.role === "RESTAURANT") {
@@ -74,12 +92,27 @@ export default function RestaurantOrdersPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Заказы ресторатора</h1>
-        <p className="text-sm text-slate-500">
-          Здесь отображаются заказы для ресторанов, которыми вы владеете.
-        </p>
-      </div>
+      {/* Шапка ресторатора */}
+      {myRestaurants.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <h2 className="text-sm font-semibold text-slate-900 mb-2">
+            Мои рестораны
+          </h2>
+          <div className="flex flex-col gap-2">
+            {myRestaurants.map((r) => (
+              <div key={r.id} className="text-sm">
+                <div className="font-medium text-slate-900">{r.name}</div>
+                <div className="text-slate-500">{r.address}</div>
+                {r.description && (
+                  <div className="text-xs text-slate-400 mt-1">
+                    {r.description}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading && <div className="text-sm text-slate-500">Загрузка...</div>}
       {error && (
@@ -128,6 +161,12 @@ export default function RestaurantOrdersPage() {
                   {st}
                 </button>
               ))}
+              <Link
+                to={`/restaurant/orders/${o.id}`}
+                className="text-xs text-blue-600 hover:text-blue-700 ml-auto"
+              >
+                Подробнее →
+              </Link>
             </div>
           </div>
         ))}
