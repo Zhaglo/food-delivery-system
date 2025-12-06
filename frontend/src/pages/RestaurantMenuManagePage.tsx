@@ -190,6 +190,29 @@ export default function RestaurantMenuManagePage() {
     }
   }
 
+    async function handleDeleteSection(id: number) {
+    if (!selectedRestaurantId) return;
+    if (!confirm("Удалить этот раздел? Блюда останутся без раздела.")) return;
+
+    try {
+      await api.delete(`/restaurants/${selectedRestaurantId}/sections/${id}/`);
+
+      // убираем раздел из списка
+      setSections((prev) => prev.filter((s) => s.id !== id));
+
+      // обновляем меню: все блюда этого раздела переводим в "без раздела"
+      setMenu((prev) =>
+        prev.map((item) =>
+          item.section_id === id ? { ...item, section_id: null } : item,
+        ),
+      );
+
+      setError(null);
+    } catch (err: any) {
+      setError(err?.data?.detail || "Ошибка удаления раздела");
+    }
+  }
+
   function startEditItem(item: MenuItem) {
     setEditingItemId(item.id);
     setEditName(item.name);
@@ -480,7 +503,15 @@ export default function RestaurantMenuManagePage() {
                   key={s.id}
                   className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-slate-100 text-xs text-slate-700"
                 >
-                  {s.name}
+                  <span>{s.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSection(s.id)}
+                    className="text-[10px] uppercase tracking-wide text-red-500 hover:text-red-700"
+                    title="Удалить раздел (блюда останутся без раздела)"
+                  >
+                    удалить
+                  </button>
                 </span>
               ))}
             </div>
