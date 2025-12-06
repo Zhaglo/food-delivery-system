@@ -59,6 +59,15 @@ export default function LoginPage() {
           >
             Войти
           </button>
+          <p className="text-xs text-slate-500 mt-4">
+              Нет аккаунта?{" "}
+              <a
+                href="/register"
+                className="text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Зарегистрироваться
+              </a>
+            </p>
         </form>
       </div>
     </div>

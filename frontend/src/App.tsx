@@ -2,6 +2,7 @@
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
 import RestaurantsPage from "./pages/RestaurantsPage";
 import RestaurantMenuPage from "./pages/RestaurantMenuPage";
 import OrdersPage from "./pages/OrdersPage";
@@ -167,6 +168,8 @@ function App() {
 
           {/* Логин */}
           <Route path="/login" element={<LoginPage />} />
+
+          <Route path="/register" element={<RegisterPage />} />
 
           {/* Список ресторанов — только клиент */}
           <Route
