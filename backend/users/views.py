@@ -68,3 +68,51 @@ def me_view(request):
             'role': user.role,
         }, json_dumps_params={'ensure_ascii': False},
     )
+
+
+@csrf_exempt
+def register_view(request):
+    if request.method != 'POST':
+        return JsonResponse({'detail': 'Method not allowed'}, status=405)
+
+    data = _parse_json(request)
+    if data is None:
+        return JsonResponse({'detail': 'Invalid JSON'}, status=400)
+
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    password2 = data.get('password2') or ''
+    email = (data.get('email') or '').strip()
+
+    if not username or not password or not password2:
+        return JsonResponse(
+            {'detail': 'username, password и password2 обязательны'},
+            status=400,
+        )
+
+    if password != password2:
+        return JsonResponse({'detail': 'Пароли не совпадают'}, status=400)
+
+    if User.objects.filter(username=username).exists():
+        return JsonResponse(
+            {'detail': 'Пользователь с таким именем уже существует'},
+            status=400,
+        )
+
+    # создаём обычного пользователя, роль по умолчанию = CLIENT
+    user = User.objects.create_user(
+        username=username,
+        email=email,
+        password=password,
+    )
+
+    return JsonResponse(
+        {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role,
+        },
+        status=201,
+        json_dumps_params={'ensure_ascii': False},
+    )
