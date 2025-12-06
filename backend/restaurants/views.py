@@ -1,11 +1,16 @@
 import json
 from decimal import Decimal
+from datetime import timedelta, date
 
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, Http404
+from django.utils import timezone
+from django.db.models import Count, Sum, F, DecimalField, ExpressionWrapper
+from django.db.models.functions import TruncDate, ExtractWeekDay
 
 from .models import Restaurant, MenuItem, MenuSection, RestaurantApplication
+from orders.models import Order, OrderItem
 from users.models import User
 
 
@@ -357,3 +362,189 @@ def restaurant_section_item_manage(request, restaurant_id: int, section_id: int)
         )
 
     return JsonResponse({"detail": "Method not allowed"}, status=405)
+
+
+@login_required
+def restaurant_stats(request, restaurant_id: int):
+    """
+    Статистика по заказам ресторана:
+    - totals (выручка, кол-во заказов, средний чек, доставлено, отменено)
+    - распределение по статусам
+    - топ блюд
+    - динамика по дням
+    - по дням недели
+    """
+    user: User = request.user  # type: ignore
+
+    if user.role not in (User.Roles.RESTAURANT, User.Roles.ADMIN):
+        return JsonResponse({"detail": "Forbidden"}, status=403)
+
+    try:
+        restaurant = Restaurant.objects.get(pk=restaurant_id)
+    except Restaurant.DoesNotExist:
+        return JsonResponse({"detail": "Restaurant not found"}, status=404)
+
+    if user.role == User.Roles.RESTAURANT and restaurant.owner_id != user.id:
+        return JsonResponse({"detail": "Forbidden"}, status=403)
+
+    # ----- период -----
+    period = request.GET.get("period", "7d")  # today | 7d | 30d | all
+    now = timezone.now()
+    start = None
+
+    if period == "today":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif period == "7d":
+        start = now - timedelta(days=7)
+    elif period == "30d":
+        start = now - timedelta(days=30)
+    elif period == "all":
+        start = None
+    else:
+        start = now - timedelta(days=7)
+
+    qs = Order.objects.filter(restaurant=restaurant)
+    if start is not None:
+        qs = qs.filter(created_at__gte=start)
+
+    # --- базовые группы ---
+    total_orders = qs.count()
+    delivered_qs = qs.filter(status=Order.Status.DELIVERED)
+    cancelled_qs = qs.filter(status=Order.Status.CANCELLED)
+    non_cancelled_qs = qs.exclude(status=Order.Status.CANCELLED)
+
+    delivered_count = delivered_qs.count()
+    cancelled_count = cancelled_qs.count()
+
+    # Выручка и средний чек считаем по НЕ отменённым заказам
+    revenue_agg = non_cancelled_qs.aggregate(total=Sum("total_price"))
+    revenue: Decimal = revenue_agg["total"] or Decimal("0.00")
+
+    non_cancelled_count = non_cancelled_qs.count()
+    if non_cancelled_count > 0:
+        avg_check = (revenue / non_cancelled_count).quantize(Decimal("0.01"))
+    else:
+        avg_check = Decimal("0.00")
+
+    # ----- статусные счётчики -----
+    status_counts_raw = (
+        qs.values("status")
+        .annotate(count=Count("id"))
+        .order_by()
+    )
+    all_statuses = [s for s, _ in Order.Status.choices]
+    status_counts: dict[str, int] = {s: 0 for s in all_statuses}
+    for row in status_counts_raw:
+        status_counts[row["status"]] = row["count"]
+
+    # ----- топ блюд (по НЕ отменённым заказам) -----
+    items_qs = (
+        OrderItem.objects
+        .filter(order__restaurant=restaurant)
+        .exclude(order__status=Order.Status.CANCELLED)
+    )
+    if start is not None:
+        items_qs = items_qs.filter(order__created_at__gte=start)
+
+    items_qs = items_qs.annotate(
+        line_total=ExpressionWrapper(
+            F("price_at_moment") * F("quantity"),
+            output_field=DecimalField(max_digits=12, decimal_places=2),
+        )
+    )
+
+    top_items_raw = (
+        items_qs
+        .values("menu_item_id", "menu_item__name")
+        .annotate(
+            quantity=Sum("quantity"),
+            revenue=Sum("line_total"),
+        )
+        .order_by("-quantity")[:10]
+    )
+
+    top_items = [
+        {
+            "menu_item_id": row["menu_item_id"],
+            "name": row["menu_item__name"],
+            "quantity": row["quantity"],
+            "revenue": str(row["revenue"] or Decimal("0.00")),
+        }
+        for row in top_items_raw
+    ]
+
+    # ----- по дням (не отменённые) -----
+    by_day_raw = (
+        non_cancelled_qs
+        .annotate(day=TruncDate("created_at"))
+        .values("day")
+        .annotate(
+            orders_count=Count("id"),
+            revenue=Sum("total_price"),
+        )
+        .order_by("day")
+    )
+
+    by_day = [
+        {
+            "date": row["day"].isoformat() if isinstance(row["day"], date) else str(row["day"]),
+            "orders_count": row["orders_count"],
+            "revenue": str(row["revenue"] or Decimal("0.00")),
+        }
+        for row in by_day_raw
+    ]
+
+    # ----- по дням недели (не отменённые) -----
+    weekday_raw = (
+        non_cancelled_qs
+        .annotate(dow=ExtractWeekDay("created_at"))  # 1..7
+        .values("dow")
+        .annotate(
+            orders_count=Count("id"),
+            revenue=Sum("total_price"),
+        )
+        .order_by("dow")
+    )
+
+    # map weekday number -> label
+    # В PostgreSQL 1 = воскресенье, 2 = понедельник, ..., 7 = суббота
+    weekday_labels = {
+        1: "Вс",
+        2: "Пн",
+        3: "Вт",
+        4: "Ср",
+        5: "Чт",
+        6: "Пт",
+        7: "Сб",
+    }
+
+    orders_by_weekday = []
+    for row in weekday_raw:
+        dow = row["dow"] or 0
+        orders_by_weekday.append(
+            {
+                "weekday": int(dow),
+                "weekday_display": weekday_labels.get(int(dow), str(dow)),
+                "orders_count": row["orders_count"],
+                "revenue": str(row["revenue"] or Decimal("0.00")),
+            }
+        )
+
+    resp = {
+        "period": period,
+        "from": start.isoformat() if start else None,
+        "to": now.isoformat(),
+        "totals": {
+            "orders_count": total_orders,
+            "delivered_count": delivered_count,
+            "cancelled_count": cancelled_count,
+            "revenue": str(revenue),
+            "avg_check": str(avg_check),
+        },
+        "status_counts": status_counts,
+        "top_items": top_items,
+        "by_day": by_day,
+        "orders_by_weekday": orders_by_weekday,
+    }
+
+    return JsonResponse(resp, json_dumps_params={"ensure_ascii": False})

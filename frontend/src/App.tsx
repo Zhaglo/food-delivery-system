@@ -12,6 +12,7 @@ import CourierApplicationPage from './pages/CourierApplicationPage';
 import RestaurantApplicationPage from "./pages/RestaurantApplicationPage";
 import RestaurantOrderDetailPage from "./pages/RestaurantOrderDetailPage";
 import RestaurantMenuManagePage from "./pages/RestaurantMenuManagePage";
+import RestaurantStatsPage from "./pages/RestaurantStatsPage";
 import { useAuth } from "./auth/AuthContext";
 import { RequireRole } from "./components/RequireRole";
 import RedirectHomeByRole from "./components/RedirectHomeByRole";
@@ -111,6 +112,16 @@ function App() {
                   >
                     <UtensilsCrossed className="h-4 w-4" />
                     <span>Меню ресторана</span>
+                  </Link>
+                  <Link
+                    to="/restaurant/stats"
+                    className={`${navLink} ${
+                      isActive("/restaurant/stats")
+                        ? "bg-slate-100 text-slate-900"
+                        : "hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>Статистика</span>
                   </Link>
                 </>
               )}
@@ -248,6 +259,15 @@ function App() {
                   <RestaurantMenuManagePage />
                 </RequireRole>
               }
+          />
+
+          <Route
+            path="/restaurant/stats"
+            element={
+              <RequireRole allowed={["RESTAURANT", "ADMIN"]}>
+                <RestaurantStatsPage />
+              </RequireRole>
+            }
           />
 
           {/* Задачи курьера — только курьер (и админ, если есть) */}

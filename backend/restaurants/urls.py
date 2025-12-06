@@ -28,4 +28,6 @@ urlpatterns = [
         views.restaurant_section_item_manage,
         name='restaurant_section_item_manage'
     ),
+
+    path('restaurants/<int:restaurant_id>/stats/', views.restaurant_stats, name='restaurant_stats'),
 ]
