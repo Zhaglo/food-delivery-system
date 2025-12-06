@@ -98,7 +98,7 @@ function App() {
                     }`}
                   >
                     <Store className="h-4 w-4" />
-                    <span>Заказы ресторатора</span>
+                    <span>Заказы ресторана</span>
                   </Link>
 
                   <Link

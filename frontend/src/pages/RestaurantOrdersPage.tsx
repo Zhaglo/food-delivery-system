@@ -448,7 +448,7 @@ export default function RestaurantOrdersPage() {
                 </span>
                 <span className="text-xs text-slate-500">{countLabel}</span>
               </div>
-              <div className="p-3 space-y-3 max-h-[480px] overflow-y-auto">
+              <div className="p-3 space-y-3">
                 {group.length === 0 ? (
                   <div className="text-xs text-slate-400">
                     Заказов нет.
