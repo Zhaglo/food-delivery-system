@@ -213,7 +213,7 @@ def restaurant_menu_item_manage(request, restaurant_id: int, item_id: int):
 
     if request.method == 'DELETE':
         item.delete()
-        return JsonResponse({'detail': 'Deleted'}, status=204)
+        return JsonResponse({'detail': 'Deleted'}, status=200)
 
     if request.method == 'PATCH':
         data = _parse_json(request)
@@ -338,7 +338,7 @@ def restaurant_section_item_manage(request, restaurant_id: int, section_id: int)
         # Отвязываем блюда от раздела, но не удаляем сами блюда
         MenuItem.objects.filter(section=section).update(section=None)
         section.delete()
-        return JsonResponse({"detail": "Deleted"}, status=204)
+        return JsonResponse({"detail": "Deleted"}, status=200)
 
     if request.method == "PATCH":
         data = _parse_json(request)
