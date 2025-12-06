@@ -26,7 +26,7 @@ def order_list_or_create(request):
         if user is None:
             return JsonResponse({'detail': 'Authentication required'}, status=401)
 
-        qs = Order.objects.select_related('client', 'restaurant').all()
+        qs = Order.objects.select_related('client', 'restaurant').prefetch_related('items__menu_item').all()
 
         if user.role == User.Roles.CLIENT:
             qs = qs.filter(client=user)
@@ -39,6 +39,18 @@ def order_list_or_create(request):
 
         data = []
         for order in qs.order_by('-created_at'):
+            items_data = []
+            for item in order.items.all():
+                items_data.append(
+                    {
+                        'id': item.id,
+                        'menu_item_id': item.menu_item_id,
+                        'name': item.menu_item.name,
+                        'quantity': item.quantity,
+                        'price': str(item.price_at_moment),
+                        'line_total': str(item.get_total()),
+                    }
+                )
             data.append(
                 {
                     'id': order.id,
@@ -48,6 +60,7 @@ def order_list_or_create(request):
                     'delivery_address': order.delivery_address,
                     'total_price': str(order.total_price),
                     'created_at': order.created_at.isoformat(),
+                    'items': items_data,
                 }
             )
         return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False})
