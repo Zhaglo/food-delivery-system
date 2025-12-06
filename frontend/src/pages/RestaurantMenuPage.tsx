@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+// src/pages/RestaurantMenuPage.tsx
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { UtensilsCrossed, MapPin } from "lucide-react";
@@ -23,12 +24,15 @@ export default function RestaurantMenuPage() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [quantities, setQuantities] = useState<Record<number, number>>({});
-  const [address, setAddress] = useState("ул. Пушкина, дом Колотушкина, 1");
+
+  const [address, setAddress] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
   const navigate = useNavigate();
 
+  // загрузка ресторана и меню
   useEffect(() => {
     if (!restaurantId) return;
     setLoading(true);
@@ -43,41 +47,92 @@ export default function RestaurantMenuPage() {
       .finally(() => setLoading(false));
   }, [restaurantId]);
 
+  // подтянуть адрес из localStorage, если есть
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      const saved = window.localStorage.getItem("delivery_address");
+      if (saved && saved.trim()) {
+        setAddress(saved);
+      } else {
+        // дефолтный адрес только если ничего не сохранено
+        setAddress("ул. Пушкина, дом Колотушкина, 1");
+      }
+    } catch {
+      setAddress("ул. Пушкина, дом Колотушкина, 1");
+    }
+  }, []);
+
+  // сохраняем адрес при изменении
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined") return;
+      if (address.trim()) {
+        window.localStorage.setItem("delivery_address", address);
+      }
+    } catch {
+      // игнорим
+    }
+  }, [address]);
+
   function setItemQuantity(id: number, value: number) {
-      setQuantities((q) => {
-        const normalized = Math.max(0, value);
-        if (normalized === 0) {
-          const copy = { ...q };
-          delete copy[id];
-          return copy;
-        }
-        return { ...q, [id]: normalized };
-      });
+    setQuantities((q) => {
+      const normalized = Math.max(0, value);
+      if (normalized === 0) {
+        const copy = { ...q };
+        delete copy[id];
+        return copy;
+      }
+      return { ...q, [id]: normalized };
+    });
   }
+
+  // выбранные позиции и итоговая сумма
+  const selectedItems = useMemo(
+    () => menu.filter((m) => (quantities[m.id] ?? 0) > 0),
+    [menu, quantities],
+  );
+
+  const totalPrice = useMemo(
+    () =>
+      selectedItems.reduce((sum, item) => {
+        const qty = quantities[item.id] ?? 0;
+        return sum + Number(item.price) * qty;
+      }, 0),
+    [selectedItems, quantities],
+  );
+
+  const hasItems = selectedItems.length > 0;
+  const hasAddress = address.trim().length > 0;
 
   async function handleCreateOrder() {
     setMessage(null);
     setError(null);
 
-    const items = Object.entries(quantities)
-      .filter(([_, qty]) => qty && Number(qty) > 0)
-      .map(([menu_item_id, qty]) => ({
-        menu_item_id: Number(menu_item_id),
-        quantity: Number(qty),
-      }));
-
-    if (!items.length) {
+    if (!hasItems) {
       setError("Выберите хотя бы одно блюдо");
       return;
     }
 
+    if (!hasAddress) {
+      setError("Укажите адрес доставки");
+      return;
+    }
+
+    const items = selectedItems.map((item) => ({
+      menu_item_id: item.id,
+      quantity: quantities[item.id],
+    }));
+
     try {
       const order = await api.post("/orders/", {
         restaurant_id: restaurantId,
-        delivery_address: address,
+        delivery_address: address.trim(),
         items,
       });
       setMessage(`Заказ #${order.id} создан, сумма: ${order.total_price} ₽`);
+      // очищаем корзину после успешного заказа
+      setQuantities({});
       setTimeout(() => navigate("/orders"), 1000);
     } catch (err: any) {
       setError(err?.data?.detail || "Ошибка создания заказа");
@@ -96,24 +151,24 @@ export default function RestaurantMenuPage() {
     <div className="space-y-5">
       {/* Карточка ресторана */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-start gap-3">
-          <div className="flex-shrink-0">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center text-white shadow-sm">
-              <UtensilsCrossed className="h-6 w-6" />
-            </div>
-          </div>
-          <div className="flex-1">
-            <h1 className="text-2xl font-semibold text-slate-900 mb-1">
-              {restaurant.name}
-            </h1>
-            <p className="flex items-center gap-1 text-sm text-slate-500">
-              <MapPin className="h-4 w-4" />
-              <span>{restaurant.address}</span>
-            </p>
-            <p className="text-xs text-slate-400 mt-1">
-              Здесь вы можете выбрать блюда и оформить заказ с доставкой.
-            </p>
+        <div className="flex-shrink-0">
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center text-white shadow-sm">
+            <UtensilsCrossed className="h-6 w-6" />
           </div>
         </div>
+        <div className="flex-1">
+          <h1 className="text-2xl font-semibold text-slate-900 mb-1">
+            {restaurant.name}
+          </h1>
+          <p className="flex items-center gap-1 text-sm text-slate-500">
+            <MapPin className="h-4 w-4" />
+            <span>{restaurant.address}</span>
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Выберите блюда, проверьте заказ и укажите адрес доставки.
+          </p>
+        </div>
+      </div>
 
       {/* Сообщения об ошибке / успехе */}
       {error && (
@@ -127,98 +182,186 @@ export default function RestaurantMenuPage() {
         </div>
       )}
 
-      {/* Меню */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-        <h2 className="text-lg font-semibold text-slate-900 mb-3">Меню</h2>
-        {menu.length === 0 ? (
-          <div className="text-sm text-slate-500">Меню пусто.</div>
-        ) : (
-          <div className="space-y-3">
-            {menu.map((item) => {
-              const qty = quantities[item.id] ?? 0;
+            {/* Меню + корзина (две колонки на десктопе) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        {/* Левая колонка: меню (занимает 2/3) */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">Меню</h2>
+            {menu.length === 0 ? (
+              <div className="text-sm text-slate-500">Меню пусто.</div>
+            ) : (
+              <div className="space-y-3">
+                {menu.map((item) => {
+                  const qty = quantities[item.id] ?? 0;
 
-              return (
-                <div
-                  key={item.id}
-                  className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0"
-                >
-                  {/* Левая часть: имя + описание */}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-slate-900">{item.name}</h3>
-                      {!item.is_available && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
-                          Нет в наличии
-                        </span>
-                      )}
-                    </div>
-                    {item.description && (
-                      <p className="text-sm text-slate-600 mt-1">
-                        {item.description}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Правая часть: цена + кнопка / счётчик */}
-                  <div className="flex flex-col items-end gap-2">
-                    <span className="text-sm font-semibold text-slate-900">
-                      {item.price} ₽
-                    </span>
-
-                    {item.is_available ? (
-                      qty === 0 ? (
-                        // КНОПКА "Добавить в заказ"
-                        <button
-                          onClick={() => setItemQuantity(item.id, 1)}
-                          className="inline-flex items-center justify-center px-3 py-1.5 rounded-full bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
-                        >
-                          Добавить в заказ
-                        </button>
-                      ) : (
-                        // СЧЁТЧИК - qty +
-                        <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-slate-300 bg-slate-50">
-                          <button
-                            onClick={() => setItemQuantity(item.id, qty - 1)}
-                            className="h-6 w-6 flex items-center justify-center rounded-full border border-slate-300 text-slate-700 text-sm leading-none hover:bg-slate-100"
-                          >
-                            −
-                          </button>
-                          <span className="min-w-[1.5rem] text-center text-sm text-slate-900">
-                            {qty}
-                          </span>
-                          <button
-                            onClick={() => setItemQuantity(item.id, qty + 1)}
-                            className="h-6 w-6 flex items-center justify-center rounded-full bg-blue-600 text-white text-sm leading-none hover:bg-blue-700"
-                          >
-                            +
-                          </button>
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0"
+                    >
+                      {/* Левая часть: имя + описание */}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-slate-900">
+                            {item.name}
+                          </h3>
+                          {!item.is_available && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                              Нет в наличии
+                            </span>
+                          )}
                         </div>
-                      )
-                    ) : (
-                      <span className="text-xs text-slate-400">Недоступно</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                        {item.description && (
+                          <p className="text-sm text-slate-600 mt-1">
+                            {item.description}
+                          </p>
+                        )}
+                      </div>
 
-      {/* Адрес и кнопка */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
-        <h2 className="text-lg font-semibold text-slate-900">Адрес доставки</h2>
-        <input
-          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-        />
-        <button
-          onClick={handleCreateOrder}
-          className="inline-flex justify-center items-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          Оформить заказ
-        </button>
+                      {/* Правая часть: цена + кнопка добавления */}
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-sm font-semibold text-slate-900">
+                          {item.price} ₽
+                        </span>
+
+                        {item.is_available ? (
+                          qty === 0 ? (
+                            <button
+                              onClick={() => setItemQuantity(item.id, 1)}
+                              className="mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-full bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
+                            >
+                              Добавить в заказ
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              className="mt-1 inline-flex items-center justify-center px-3 py-1.5 rounded-full bg-slate-100 text-slate-500 text-xs font-medium border border-slate-300 cursor-default"
+                            >
+                              Добавлено
+                            </button>
+                          )
+                        ) : (
+                          <span className="text-xs text-slate-400 mt-1">
+                            Недоступно
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Правая колонка: корзина + адрес */}
+        <div className="space-y-4">
+          {/* Корзина */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
+            <h2 className="text-lg font-semibold text-slate-900">Ваш заказ</h2>
+
+            {!hasItems ? (
+              <div className="text-sm text-slate-500">
+                Вы ещё не добавили ни одного блюда.
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {selectedItems.map((item) => {
+                    const qty = quantities[item.id] ?? 0;
+                    const lineTotal = (Number(item.price) * qty).toFixed(2);
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium text-slate-900">
+                            {item.name}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {item.price} ₽ / шт
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* контрол количества */}
+                          <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-slate-300 bg-slate-50">
+                            <button
+                              onClick={() => setItemQuantity(item.id, qty - 1)}
+                              className="h-6 w-6 flex items-center justify-center rounded-full border border-slate-300 text-slate-700 text-xs hover:bg-slate-100"
+                              title="Уменьшить количество"
+                            >
+                              −
+                            </button>
+                            <span className="min-w-[1.5rem] text-center text-sm text-slate-900">
+                              {qty}
+                            </span>
+                            <button
+                              onClick={() => setItemQuantity(item.id, qty + 1)}
+                              className="h-6 w-6 flex items-center justify-center rounded-full bg-blue-600 text-white text-xs hover:bg-blue-700"
+                              title="Увеличить количество"
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* итог по блюду */}
+                          <span className="text-sm font-semibold text-slate-900 min-w-[72px] text-right">
+                            {lineTotal} ₽
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                  <span className="text-sm text-slate-600">
+                    Итого к оплате:
+                  </span>
+                  <span className="text-lg font-semibold text-slate-900">
+                    {totalPrice.toFixed(2)} ₽
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setQuantities({})}
+                  className="text-xs text-slate-500 hover:text-slate-700"
+                >
+                  Очистить корзину
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Адрес и кнопка */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Адрес доставки
+            </h2>
+            <input
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Укажите улицу, дом, подъезд, код и т.п."
+            />
+            <button
+              onClick={handleCreateOrder}
+              disabled={!hasItems || !hasAddress}
+              className="inline-flex justify-center items-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {hasItems && hasAddress
+                ? "Оформить заказ"
+                : !hasItems
+                ? "Выберите блюда"
+                : "Укажите адрес"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
