@@ -9,6 +9,7 @@ import OrdersPage from "./pages/OrdersPage";
 import RestaurantOrdersPage from "./pages/RestaurantOrdersPage";
 import CourierTasksPage from "./pages/CourierTasksPage";
 import CourierApplicationPage from './pages/CourierApplicationPage';
+import RestaurantApplicationPage from "./pages/RestaurantApplicationPage";
 import { useAuth } from "./auth/AuthContext";
 import { RequireRole } from "./components/RequireRole";
 import RedirectHomeByRole from "./components/RedirectHomeByRole";
@@ -168,6 +169,7 @@ function App() {
           />
 
           <Route path="/apply/courier" element={<CourierApplicationPage />} />
+          <Route path="/apply/restaurant" element={<RestaurantApplicationPage />} />
 
           {/* Логин */}
           <Route path="/login" element={<LoginPage />} />

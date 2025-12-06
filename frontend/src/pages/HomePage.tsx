@@ -108,13 +108,13 @@ export default function HomePage() {
         <RoleCard
           icon={<Store className="h-6 w-6 text-emerald-600" />}
           title="Для ресторанов"
-          description="Управляйте заказами, отслеживайте этапы приготовления и контролируйте нагрузку на кухню."
+          description="Управляйте заказами, отслеживайте этапы приготовления и контролируйте нагрузку на кухню. Для начала оставьте заявку на подключение ресторана."
           linkLabel={
             user?.role === "RESTAURANT"
-              ? "Перейти к заказам"
-              : "Войти как ресторатор"
+              ? "Перейти к заказам ресторатора"
+              : "Стать партнёром-рестораном"
           }
-          to={user?.role === "RESTAURANT" ? "/restaurant/orders" : "/login"}
+          to={user?.role === "RESTAURANT" ? "/restaurant/orders" : "/apply/restaurant"}
         />
         <RoleCard
           icon={<Bike className="h-6 w-6 text-orange-500" />}

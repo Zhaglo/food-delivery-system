@@ -28,3 +28,40 @@ class MenuItem(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.restaurant.name})'
+
+
+class RestaurantApplication(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "На рассмотрении"
+        APPROVED = "APPROVED", "Одобрена"
+        REJECTED = "REJECTED", "Отклонена"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="restaurant_applications",
+        verbose_name="Пользователь",
+    )
+
+    restaurant_name = models.CharField("Название ресторана", max_length=255)
+    address = models.CharField("Адрес", max_length=255)
+    description = models.TextField("Описание ресторана", blank=True)
+
+    contact_name = models.CharField("Контактное лицо", max_length=255)
+    contact_phone = models.CharField("Телефон", max_length=50)
+    comment = models.TextField("Комментарий", blank=True)
+
+    status = models.CharField(
+        "Статус заявки",
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+
+    created_at = models.DateTimeField("Создана", auto_now_add=True)
+    processed_at = models.DateTimeField("Обработана", null=True, blank=True)
+
+    def __str__(self):
+        return f"Заявка ресторана #{self.id} ({self.restaurant_name})"
