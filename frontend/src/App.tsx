@@ -1,5 +1,6 @@
 // src/App.tsx
 import { Routes, Route, Link, useLocation } from "react-router-dom";
+import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RestaurantsPage from "./pages/RestaurantsPage";
 import RestaurantMenuPage from "./pages/RestaurantMenuPage";
@@ -7,7 +8,9 @@ import OrdersPage from "./pages/OrdersPage";
 import RestaurantOrdersPage from "./pages/RestaurantOrdersPage";
 import CourierTasksPage from "./pages/CourierTasksPage";
 import { useAuth } from "./auth/AuthContext";
-import { UtensilsCrossed, Bike, UserCircle2, Store } from "lucide-react";
+import { RequireRole } from "./components/RequireRole";
+import RedirectHomeByRole from "./components/RedirectHomeByRole"
+import { UtensilsCrossed, Bike, UserCircle2, Store, Home } from "lucide-react";
 
 function App() {
   const { user, logout, loading } = useAuth();
@@ -25,6 +28,7 @@ function App() {
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-4">
+            {/* Лого */}
             <Link
               to="/"
               className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900"
@@ -33,33 +37,51 @@ function App() {
               <span>Food Delivery</span>
             </Link>
 
+            {/* Навигация */}
             <nav className="hidden sm:flex items-center gap-1 text-sm text-slate-600">
-              <Link
-                to="/"
-                className={`${navLink} ${
-                  isActive("/")
-                    ? "bg-slate-100 text-slate-900"
-                    : "hover:bg-slate-50 hover:text-slate-900"
-                }`}
-              >
-                <Store className="h-4 w-4" />
-                <span>Рестораны</span>
-              </Link>
+              {!user && (
+                  <Link
+                    to="/"
+                    className={`${navLink} ${
+                      isActive("/")
+                        ? "bg-slate-100 text-slate-900"
+                        : "hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <Home className="h-4 w-4" />
+                    <span>Главная</span>
+                  </Link>
+                )}
 
+              {/* Клиент: рестораны + мои заказы */}
               {user?.role === "CLIENT" && (
-                <Link
-                  to="/orders"
-                  className={`${navLink} ${
-                    isActive("/orders")
-                      ? "bg-slate-100 text-slate-900"
-                      : "hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <UtensilsCrossed className="h-4 w-4" />
-                  <span>Мои заказы</span>
-                </Link>
+                <>
+                  <Link
+                    to="/restaurants"
+                    className={`${navLink} ${
+                      isActive("/restaurants")
+                        ? "bg-slate-100 text-slate-900"
+                        : "hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <Store className="h-4 w-4" />
+                    <span>Рестораны</span>
+                  </Link>
+                  <Link
+                    to="/orders"
+                    className={`${navLink} ${
+                      isActive("/orders")
+                        ? "bg-slate-100 text-slate-900"
+                        : "hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <UtensilsCrossed className="h-4 w-4" />
+                    <span>Мои заказы</span>
+                  </Link>
+                </>
               )}
 
+              {/* Ресторатор: только заказы ресторатора */}
               {user?.role === "RESTAURANT" && (
                 <Link
                   to="/restaurant/orders"
@@ -74,6 +96,7 @@ function App() {
                 </Link>
               )}
 
+              {/* Курьер: только задачи */}
               {user?.role === "COURIER" && (
                 <Link
                   to="/courier/tasks"
@@ -88,20 +111,24 @@ function App() {
                 </Link>
               )}
 
-              <Link
-                to="/login"
-                className={`${navLink} ${
-                  isActive("/login")
-                    ? "bg-slate-100 text-slate-900"
-                    : "hover:bg-slate-50 hover:text-slate-900"
-                }`}
-              >
-                <UserCircle2 className="h-4 w-4" />
-                <span>Вход</span>
-              </Link>
+              {/* Логин — отдельной ссылкой (актуален для неавторизованных) */}
+              {!user && (
+                <Link
+                  to="/login"
+                  className={`${navLink} ${
+                    isActive("/login")
+                      ? "bg-slate-100 text-slate-900"
+                      : "hover:bg-slate-50 hover:text-slate-900"
+                  }`}
+                >
+                  <UserCircle2 className="h-4 w-4" />
+                  <span>Вход</span>
+                </Link>
+              )}
             </nav>
           </div>
 
+          {/* Правый блок: информация о пользователе */}
           <div className="flex items-center gap-3 text-sm">
             {loading && <span className="text-slate-500">Проверка...</span>}
             {!loading && user && (
@@ -130,12 +157,66 @@ function App() {
 
       <main className="max-w-5xl mx-auto px-4 py-6">
         <Routes>
-          <Route path="/" element={<RestaurantsPage />} />
+          {/* Главная визитка — доступна всем */}
+          <Route
+              path="/"
+              element={
+                user ? <RedirectHomeByRole /> : <HomePage />
+              }
+          />
+
+          {/* Логин */}
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/restaurants/:id" element={<RestaurantMenuPage />} />
-          <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/restaurant/orders" element={<RestaurantOrdersPage />} />
-          <Route path="/courier/tasks" element={<CourierTasksPage />} />
+
+          {/* Список ресторанов — только клиент */}
+          <Route
+            path="/restaurants"
+            element={
+              <RequireRole allowed={["CLIENT"]}>
+                <RestaurantsPage />
+              </RequireRole>
+            }
+          />
+
+          {/* Меню ресторана — только клиент */}
+          <Route
+            path="/restaurants/:id"
+            element={
+              <RequireRole allowed={["CLIENT"]}>
+                <RestaurantMenuPage />
+              </RequireRole>
+            }
+          />
+
+          {/* Мои заказы — только клиент */}
+          <Route
+            path="/orders"
+            element={
+              <RequireRole allowed={["CLIENT"]}>
+                <OrdersPage />
+              </RequireRole>
+            }
+          />
+
+          {/* Заказы ресторатора — только ресторатор (и админ, если есть) */}
+          <Route
+            path="/restaurant/orders"
+            element={
+              <RequireRole allowed={["RESTAURANT", "ADMIN"]}>
+                <RestaurantOrdersPage />
+              </RequireRole>
+            }
+          />
+
+          {/* Задачи курьера — только курьер (и админ, если есть) */}
+          <Route
+            path="/courier/tasks"
+            element={
+              <RequireRole allowed={["COURIER", "ADMIN"]}>
+                <CourierTasksPage />
+              </RequireRole>
+            }
+          />
         </Routes>
       </main>
     </div>
