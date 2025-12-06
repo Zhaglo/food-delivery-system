@@ -5,6 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import DeliveryTask, CourierProfile
 from users.models import User
+from orders.models import Order
 
 
 def _parse_json(request):
@@ -59,12 +60,12 @@ def delivery_task_change_status(request, task_id: int):
 
     user: User | None = request.user if request.user.is_authenticated else None
     if user is None:
-        return JsonResponse({'detail': 'Authentication requiered'}, status=401)
+        return JsonResponse({'detail': 'Authentication required'}, status=401)
 
     try:
         task = DeliveryTask.objects.select_related('courier__user').get(pk=task_id)
     except DeliveryTask.DoesNotExist:
-        return Http404('Delivery task not found')
+        raise Http404('Delivery task not found')
 
     if user.role == User.Roles.COURIER:
         if task.courier is None or task.courier.user_id != user.id:
@@ -85,6 +86,15 @@ def delivery_task_change_status(request, task_id: int):
 
     task.status = new_status
     task.save()
+
+    if new_status == DeliveryTask.Status.IN_PROGRESS:
+        order = task.order
+        order.status = Order.Status.ON_DELIVERY
+        order.save()
+    elif new_status == DeliveryTask.Status.DONE:
+        order = task.order
+        order.status = Order.Status.DELIVERED
+        order.save()
 
     return JsonResponse(
         {

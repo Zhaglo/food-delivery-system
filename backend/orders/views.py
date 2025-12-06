@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.http import JsonResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
 
 from users.models import User
 from orders.models import Order, OrderItem
@@ -158,25 +159,34 @@ def _order_create(request, user: User | None):
         json_dumps_params={'ensure_ascii': False}
     )
 
+
+@login_required
 def order_detail(request, order_id: int):
     if request.method != 'GET':
         return JsonResponse({'detail': 'Method not allowed'}, status=405)
 
     try:
-        order = Order.objects.select_related('client', 'restaurant').prefetch_related('items__menu_item').get(
-            pk=order_id
+        order = (
+            Order.objects
+            .select_related('client', 'restaurant')
+            .prefetch_related('items__menu_item')
+            .get(pk=order_id)
         )
     except Order.DoesNotExist:
         raise Http404('Order not found')
 
-    user: User | None = request.user if request.user.is_authenticated else None
+    user: User = request.user
 
-    if user is not None and user.role != User.Roles.ADMIN:
+    # Админ видит всё
+    if user.role != User.Roles.ADMIN:
         if user.role == User.Roles.CLIENT and order.client_id != user.id:
             return JsonResponse({'detail': 'Forbidden'}, status=403)
+
         if user.role == User.Roles.RESTAURANT and order.restaurant.owner_id != user.id:
             return JsonResponse({'detail': 'Forbidden'}, status=403)
+
         if user.role == User.Roles.COURIER:
+            # у заказа может не быть задачи доставки или курьера
             if not hasattr(order, 'delivery_task') or order.delivery_task.courier is None:
                 return JsonResponse({'detail': 'Forbidden'}, status=403)
             if order.delivery_task.courier.user_id != user.id:
