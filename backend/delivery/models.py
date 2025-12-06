@@ -53,3 +53,42 @@ class DeliveryTask(models.Model):
 
     def __str__(self):
         return f'Delivery for order #{self.order.id} ({self.status})'
+
+
+class CourierApplication(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "На рассмотрении"
+        APPROVED = "APPROVED", "Одобрена"
+        REJECTED = "REJECTED", "Отклонена"
+
+    # Пользователь, оставивший заявку (может быть null, если заявка от гостя)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="courier_applications",
+    )
+
+    full_name = models.CharField("ФИО", max_length=255)
+    phone = models.CharField("Телефон", max_length=50)
+    vehicle_type = models.CharField(
+        "Тип транспорта",
+        max_length=50,
+        blank=True,
+        help_text="Например: пешком, велосипед, авто",
+    )
+    comment = models.TextField("Комментарий", blank=True)
+
+    status = models.CharField(
+        "Статус заявки",
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+
+    created_at = models.DateTimeField("Создана", auto_now_add=True)
+    processed_at = models.DateTimeField("Обработана", null=True, blank=True)
+
+    def __str__(self):
+        return f"Заявка курьера #{self.id} ({self.full_name})"

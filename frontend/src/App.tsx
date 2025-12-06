@@ -8,9 +8,10 @@ import RestaurantMenuPage from "./pages/RestaurantMenuPage";
 import OrdersPage from "./pages/OrdersPage";
 import RestaurantOrdersPage from "./pages/RestaurantOrdersPage";
 import CourierTasksPage from "./pages/CourierTasksPage";
+import CourierApplicationPage from './pages/CourierApplicationPage';
 import { useAuth } from "./auth/AuthContext";
 import { RequireRole } from "./components/RequireRole";
-import RedirectHomeByRole from "./components/RedirectHomeByRole"
+import RedirectHomeByRole from "./components/RedirectHomeByRole";
 import { UtensilsCrossed, Bike, UserCircle2, Store, Home } from "lucide-react";
 
 function App() {
@@ -165,6 +166,8 @@ function App() {
                 user ? <RedirectHomeByRole /> : <HomePage />
               }
           />
+
+          <Route path="/apply/courier" element={<CourierApplicationPage />} />
 
           {/* Логин */}
           <Route path="/login" element={<LoginPage />} />

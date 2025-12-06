@@ -119,13 +119,9 @@ export default function HomePage() {
         <RoleCard
           icon={<Bike className="h-6 w-6 text-orange-500" />}
           title="Для курьеров"
-          description="Получайте задачи доставки, просматривайте адреса клиентов и отмечайте выполнение заказов."
-          linkLabel={
-            user?.role === "COURIER"
-              ? "Перейти к задачам"
-              : "Войти как курьер"
-          }
-          to={user?.role === "COURIER" ? "/courier/tasks" : "/login"}
+          description="Получайте задачи доставки, просматривайте адреса клиентов и отмечайте выполнение заказов. Для начала оставьте заявку, и администратор подключит вас к системе."
+          linkLabel="Оставить заявку курьера"
+          to="/apply/courier"
         />
       </section>
 

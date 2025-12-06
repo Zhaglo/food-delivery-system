@@ -3,7 +3,7 @@ import json
 from django.http import JsonResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import DeliveryTask, CourierProfile
+from .models import DeliveryTask, CourierProfile, CourierApplication
 from users.models import User
 from orders.models import Order
 
@@ -102,4 +102,50 @@ def delivery_task_change_status(request, task_id: int):
             'status': task.status,
         },
         json_dumps_params={'ensure_ascii': False}
+    )
+
+
+@csrf_exempt
+def courier_application_create(request):
+    """
+    Оставить заявку на регистрацию курьером.
+    Может вызываться как залогиненным пользователем, так и гостем.
+    """
+    if request.method != "POST":
+        return JsonResponse({"detail": "Method not allowed"}, status=405)
+
+    data = _parse_json(request)
+    if data is None:
+        return JsonResponse({"detail": "Invalid JSON"}, status=400)
+
+    full_name = (data.get("full_name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    vehicle_type = (data.get("vehicle_type") or "").strip()
+    comment = (data.get("comment") or "").strip()
+
+    if not full_name or not phone:
+        return JsonResponse(
+            {"detail": "full_name и phone обязательны"},
+            status=400,
+        )
+
+    user: User | None = request.user if request.user.is_authenticated else None
+
+    app = CourierApplication.objects.create(
+        user=user,
+        full_name=full_name,
+        phone=phone,
+        vehicle_type=vehicle_type,
+        comment=comment,
+    )
+
+    return JsonResponse(
+        {
+            "id": app.id,
+            "status": app.status,
+            "full_name": app.full_name,
+            "phone": app.phone,
+        },
+        status=201,
+        json_dumps_params={"ensure_ascii": False},
     )
