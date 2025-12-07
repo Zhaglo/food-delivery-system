@@ -9,6 +9,7 @@ import OrdersPage from "./pages/OrdersPage";
 import ClientOrderDetailPage from "./pages/ClientOrderDetailPage";
 import RestaurantOrdersPage from "./pages/RestaurantOrdersPage";
 import CourierTasksPage from "./pages/CourierTasksPage";
+import CourierOffersPage from "./pages/CourierOffersPage";
 import CourierApplicationPage from './pages/CourierApplicationPage';
 import RestaurantApplicationPage from "./pages/RestaurantApplicationPage";
 import RestaurantOrderDetailPage from "./pages/RestaurantOrderDetailPage";
@@ -127,19 +128,33 @@ function App() {
                 </>
               )}
 
-              {/* Курьер: только задачи */}
+              {/* Курьер: задачи и офферы */}
               {user?.role === "COURIER" && (
-                <Link
-                  to="/courier/tasks"
-                  className={`${navLink} ${
-                    isActive("/courier/tasks")
-                      ? "bg-slate-100 text-slate-900"
-                      : "hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <Bike className="h-4 w-4" />
-                  <span>Задачи курьера</span>
-                </Link>
+                <>
+                  <Link
+                    to="/courier/offers"
+                    className={`${navLink} ${
+                      isActive("/courier/offers")
+                        ? "bg-slate-100 text-slate-900"
+                        : "hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <Bike className="h-4 w-4" />
+                    <span>Доступные заказы</span>
+                  </Link>
+
+                  <Link
+                    to="/courier/tasks"
+                    className={`${navLink} ${
+                      isActive("/courier/tasks")
+                        ? "bg-slate-100 text-slate-900"
+                        : "hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <Bike className="h-4 w-4" />
+                    <span>Мои задачи</span>
+                  </Link>
+                </>
               )}
 
               {/* Логин — отдельной ссылкой (актуален для неавторизованных) */}
@@ -287,6 +302,15 @@ function App() {
             element={
               <RequireRole allowed={["COURIER", "ADMIN"]}>
                 <CourierTasksPage />
+              </RequireRole>
+            }
+          />
+          {/* Курьер: доступные заказы */}
+          <Route
+            path="/courier/offers"
+            element={
+              <RequireRole allowed={["COURIER"]}>
+                <CourierOffersPage />
               </RequireRole>
             }
           />

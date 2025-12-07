@@ -2,6 +2,8 @@ import json
 
 from django.http import JsonResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
+from django.utils import timezone
 
 from .models import DeliveryTask, CourierProfile, CourierApplication
 from users.models import User
@@ -16,6 +18,9 @@ def _parse_json(request):
 
 
 def delivery_task_list(request):
+    """
+    Список задач доставки для текущего курьера (или админа).
+    """
     if request.method != 'GET':
         return JsonResponse({'detail': 'Method not allowed'}, status=405)
 
@@ -53,6 +58,153 @@ def delivery_task_list(request):
     return JsonResponse(data, safe=False, json_dumps_params={'ensure_ascii': False})
 
 
+def delivery_offers_list(request):
+    """
+    Список свободных задач (офферы) для курьеров:
+    - статус PENDING
+    - courier IS NULL
+    """
+    if request.method != "GET":
+        return JsonResponse({"detail": "Method not allowed"}, status=405)
+
+    user: User | None = request.user if request.user.is_authenticated else None
+    if user is None:
+        return JsonResponse({"detail": "Authentication required"}, status=401)
+
+    if user.role not in (User.Roles.COURIER, User.Roles.ADMIN):
+        return JsonResponse({"detail": "Forbidden"}, status=403)
+
+    # курьер должен иметь профиль и быть активным
+    if user.role == User.Roles.COURIER:
+        try:
+            courier_profile = CourierProfile.objects.get(user=user)
+        except CourierProfile.DoesNotExist:
+            return JsonResponse({"detail": "Courier profile not found"}, status=404)
+        if not courier_profile.is_active:
+            return JsonResponse(
+                {"detail": "Courier profile is not active"},
+                status=403,
+            )
+
+    qs = (
+        DeliveryTask.objects
+        .select_related("order__restaurant")
+        .filter(
+            status=DeliveryTask.Status.PENDING,
+            courier__isnull=True,
+        )
+    )
+
+    data = []
+    for task in qs.order_by("-order__created_at"):
+        order = task.order
+        data.append(
+            {
+                "id": task.id,
+                "order_id": order.id,
+                "status": task.status,
+                "restaurant_id": order.restaurant_id,
+                "restaurant_name": order.restaurant.name,
+                "client_id": order.client_id,
+                "delivery_address": order.delivery_address,
+                "order_total_price": str(order.total_price),
+                "order_created_at": order.created_at.isoformat(),
+            }
+        )
+
+    return JsonResponse(data, safe=False, json_dumps_params={"ensure_ascii": False})
+
+
+@csrf_exempt
+def delivery_task_assign(request, task_id: int):
+    """
+    Курьер берёт свободную задачу доставки (оффер) себе.
+
+    Правила:
+    - только роль COURIER (или ADMIN для тестов)
+    - курьер должен быть активен
+    - у курьера не должно быть другой активной задачи (ASSIGNED/IN_PROGRESS)
+    - задача должна быть в статусе PENDING и без курьера
+    """
+    if request.method != "POST":
+        return JsonResponse({"detail": "Method not allowed"}, status=405)
+
+    user: User | None = request.user if request.user.is_authenticated else None
+    if user is None:
+        return JsonResponse({"detail": "Authentication required"}, status=401)
+
+    if user.role not in (User.Roles.COURIER, User.Roles.ADMIN):
+        return JsonResponse({"detail": "Forbidden"}, status=403)
+
+    courier_profile = None
+    if user.role == User.Roles.COURIER:
+        try:
+            courier_profile = CourierProfile.objects.get(user=user)
+        except CourierProfile.DoesNotExist:
+            return JsonResponse({"detail": "Courier profile not found"}, status=404)
+
+        if not courier_profile.is_active:
+            return JsonResponse(
+                {"detail": "Courier profile is not active"},
+                status=403,
+            )
+
+        # проверка: нет ли уже активной задачи
+        has_active = DeliveryTask.objects.filter(
+            courier=courier_profile,
+            status__in=[
+                DeliveryTask.Status.ASSIGNED,
+                DeliveryTask.Status.IN_PROGRESS,
+            ],
+        ).exists()
+        if has_active:
+            return JsonResponse(
+                {
+                    "detail": "У вас уже есть активная задача. "
+                    "Завершите её прежде чем брать новую."
+                },
+                status=400,
+            )
+
+    # защищаемся от гонки: два курьера одновременно жмут "Взять"
+    with transaction.atomic():
+        try:
+            task = (
+                DeliveryTask.objects
+                .select_for_update()
+                .select_related("order")
+                .get(pk=task_id)
+            )
+        except DeliveryTask.DoesNotExist:
+            raise Http404("Delivery task not found")
+
+        if task.status != DeliveryTask.Status.PENDING or task.courier_id is not None:
+            return JsonResponse(
+                {"detail": "Task is already taken or not in PENDING status"},
+                status=400,
+            )
+
+        if user.role == User.Roles.COURIER:
+            task.courier = courier_profile
+
+        task.status = DeliveryTask.Status.ASSIGNED
+        task.assigned_at = timezone.now()
+        task.save()
+
+    order = task.order
+
+    return JsonResponse(
+        {
+            "id": task.id,
+            "status": task.status,
+            "order_id": order.id,
+            "courier_id": task.courier_id,
+            "delivery_address": order.delivery_address,
+        },
+        json_dumps_params={"ensure_ascii": False},
+    )
+
+
 @csrf_exempt
 def delivery_task_change_status(request, task_id: int):
     if request.method != 'PATCH':
@@ -87,6 +239,7 @@ def delivery_task_change_status(request, task_id: int):
     task.status = new_status
     task.save()
 
+    # синхронизируем статус заказа
     if new_status == DeliveryTask.Status.IN_PROGRESS:
         order = task.order
         order.status = Order.Status.ON_DELIVERY

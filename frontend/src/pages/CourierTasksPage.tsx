@@ -52,7 +52,7 @@ export default function CourierTasksPage() {
     }
   }
 
-  if (!user || user.role !== "COURIER") {
+  if (!user || user.role !== "COURIER" && user.role !== "ADMIN") {
     return <div>Страница доступна только пользователю с ролью COURIER</div>;
   }
 

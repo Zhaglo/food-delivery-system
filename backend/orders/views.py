@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from users.models import User
 from orders.models import Order, OrderItem
 from restaurants.models import Restaurant, MenuItem
+from delivery.models import DeliveryTask
 
 
 def _parse_json(request):
@@ -270,6 +271,18 @@ def order_change_status(request, order_id: int):
 
     order.status = new_status
     order.save()
+
+    # === ключевое: при переводе заказа "в доставку" создаём DeliveryTask ===
+    if new_status == Order.Status.ON_DELIVERY:
+        # либо берём существующую задачу, либо создаём новую
+        task, created = DeliveryTask.objects.get_or_create(
+            order=order,
+            defaults={
+                "status": DeliveryTask.Status.PENDING,
+            },
+        )
+        # если задача уже существовала, оставляем как есть (на всякий случай можно
+        # добавить логику обновления, но пока не трогаем)
 
     return JsonResponse(
         {
