@@ -5,16 +5,25 @@ import { api } from "../api/client";
 import { PageHeader } from "../components/PageHeader";
 import { Card } from "../components/Card";
 import { StatusBadge } from "../components/StatusBadge";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Clock, MapPin, UtensilsCrossed } from "lucide-react";
+
+type OrderItemShort = {
+  id: number;
+  menu_item_id: number;
+  name: string;
+  quantity: number;
+  line_total: string;
+};
 
 type Order = {
   id: number;
   status: string;
   restaurant_id: number;
-  restaurant_name?: string; // ← новое поле
+  restaurant_name?: string;
   delivery_address: string;
   total_price: string;
   created_at: string;
+  items?: OrderItemShort[]; // фронт выдержит, даже если бэкенд не вернёт
 };
 
 const ACTIVE_STATUSES = ["NEW", "COOKING", "READY", "ON_DELIVERY"] as const;
@@ -71,12 +80,100 @@ export default function OrdersPage() {
     [orders],
   );
 
+  function renderOrderCard(o: Order, compact: boolean = false) {
+    const createdAt = new Date(o.created_at);
+    const createdLabel = isNaN(createdAt.getTime())
+      ? o.created_at
+      : createdAt.toLocaleString();
+
+    const items = o.items || [];
+    const itemsPreview = items.slice(0, 3);
+    const moreCount =
+      items.length > itemsPreview.length
+        ? items.length - itemsPreview.length
+        : 0;
+
+    return (
+      <Card key={o.id} className="space-y-3">
+        {/* Верхняя строка: номер заказа + статус */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-sm text-slate-700">
+            Заказ{" "}
+            <span className="font-semibold text-slate-900">#{o.id}</span>
+            <span className="block text-xs text-slate-500 mt-0.5">
+              Ресторан:{" "}
+              <span className="font-medium text-slate-900">
+                {o.restaurant_name || `Ресторан #${o.restaurant_id}`}
+              </span>
+            </span>
+          </div>
+          <StatusBadge status={o.status} kind="order" />
+        </div>
+
+        {/* Время + сумма */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            <span>{createdLabel}</span>
+          </span>
+          <span className="text-sm text-slate-700">
+            Сумма:{" "}
+            <span className="font-semibold text-slate-900">
+              {o.total_price} ₽
+            </span>
+          </span>
+        </div>
+
+        {/* Адрес */}
+        <div className="text-xs text-slate-600 flex items-start gap-1">
+          <MapPin className="h-3 w-3 mt-[2px]" />
+          <span className="break-words">{o.delivery_address}</span>
+        </div>
+
+        {/* Превью состава заказа (если есть items) */}
+        {items.length > 0 && (
+          <div className="bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 space-y-1">
+            <div className="flex items-center gap-1 text-[11px] text-slate-500 mb-1">
+              <UtensilsCrossed className="h-3 w-3" />
+              <span>Состав заказа</span>
+            </div>
+            {itemsPreview.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between text-xs text-slate-700"
+              >
+                <span className="truncate">
+                  {item.name} × {item.quantity}
+                </span>
+                <span className="text-slate-500">
+                  {item.line_total} ₽
+                </span>
+              </div>
+            ))}
+            {moreCount > 0 && (
+              <div className="text-[11px] text-slate-400">
+                + ещё {moreCount} позиц{moreCount === 1 ? "ия" : "ии"}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Низ карточки: ссылка на детали */}
+        <div className="flex items-center justify-end pt-1">
+          <Link
+            to={`/orders/${o.id}`}
+            className="text-xs text-blue-600 hover:text-blue-700 inline-flex items-center gap-1"
+          >
+            {compact ? "Подробнее" : "Подробнее о заказе"}
+            <span className="inline-block h-3 w-3 border-t border-r border-blue-600 rotate-45" />
+          </Link>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Мои заказы"
-        subtitle="Текущие заказы и история заказов."
-      />
 
       {loading && (
         <div className="text-sm text-slate-500">Загрузка...</div>
@@ -100,47 +197,7 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {activeOrders.map((o) => (
-          <Card key={o.id}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-slate-700">
-                Заказ{" "}
-                <span className="font-semibold text-slate-900">
-                  #{o.id}
-                </span>
-              </div>
-              <StatusBadge status={o.status} kind="order" />
-            </div>
-
-            {/* ресторан */}
-            <div className="text-xs text-slate-500 mb-1">
-              Ресторан:{" "}
-              <span className="font-medium text-slate-900">
-                {o.restaurant_name || `Ресторан #${o.restaurant_id}`}
-              </span>
-            </div>
-
-            <div className="text-sm text-slate-600">
-              Сумма:{" "}
-              <span className="font-medium">{o.total_price} ₽</span>
-            </div>
-            <div className="text-xs text-slate-500">
-              {new Date(o.created_at).toLocaleString()}
-            </div>
-            <div className="text-xs text-slate-500 mb-1">
-              Адрес доставки: {o.delivery_address}
-            </div>
-
-            <div className="flex justify-end">
-              <Link
-                to={`/orders/${o.id}`}
-                className="text-xs text-blue-600 hover:text-blue-700"
-              >
-                Подробнее →
-              </Link>
-            </div>
-          </Card>
-        ))}
+        {activeOrders.map((o) => renderOrderCard(o))}
       </section>
 
       {/* История заказов */}
@@ -170,47 +227,7 @@ export default function OrdersPage() {
                 История заказов пуста.
               </div>
             ) : (
-              historyOrders.map((o) => (
-                <Card key={o.id}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm text-slate-700">
-                      Заказ{" "}
-                      <span className="font-semibold text-slate-900">
-                        #{o.id}
-                      </span>
-                    </div>
-                    <StatusBadge status={o.status} kind="order" />
-                  </div>
-
-                  <div className="text-xs text-slate-500 mb-1">
-                    Ресторан:{" "}
-                    <span className="font-medium text-slate-900">
-                      {o.restaurant_name || `Ресторан #${o.restaurant_id}`}
-                    </span>
-                  </div>
-
-                  <div className="text-sm text-slate-600">
-                    Сумма:{" "}
-                    <span className="font-medium">
-                      {o.total_price} ₽
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {new Date(o.created_at).toLocaleString()}
-                  </div>
-                  <div className="text-xs text-slate-500 mb-1">
-                    Адрес доставки: {o.delivery_address}
-                  </div>
-                  <div className="flex justify-end">
-                    <Link
-                      to={`/orders/${o.id}`}
-                      className="text-xs text-blue-600 hover:text-blue-700"
-                    >
-                      Подробнее →
-                    </Link>
-                  </div>
-                </Card>
-              ))
+              historyOrders.map((o) => renderOrderCard(o, true))
             )}
           </div>
         )}

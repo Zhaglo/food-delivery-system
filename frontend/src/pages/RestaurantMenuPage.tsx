@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
-import { UtensilsCrossed, MapPin } from "lucide-react";
+import { UtensilsCrossed, MapPin, Pizza } from "lucide-react";
 
 type MenuItem = {
   id: number;
@@ -55,7 +55,6 @@ export default function RestaurantMenuPage() {
       if (saved && saved.trim()) {
         setAddress(saved);
       } else {
-        // дефолтный адрес только если ничего не сохранено
         setAddress("ул. Пушкина, дом Колотушкина, 1");
       }
     } catch {
@@ -87,7 +86,6 @@ export default function RestaurantMenuPage() {
     });
   }
 
-  // выбранные позиции и итоговая сумма
   const selectedItems = useMemo(
     () => menu.filter((m) => (quantities[m.id] ?? 0) > 0),
     [menu, quantities],
@@ -131,7 +129,6 @@ export default function RestaurantMenuPage() {
         items,
       });
       setMessage(`Заказ #${order.id} создан, сумма: ${order.total_price} ₽`);
-      // очищаем корзину после успешного заказа
       setQuantities({});
       setTimeout(() => navigate("/orders"), 1000);
     } catch (err: any) {
@@ -148,25 +145,25 @@ export default function RestaurantMenuPage() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Карточка ресторана */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex items-start gap-3">
-        <div className="flex-shrink-0">
-          <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center text-white shadow-sm">
-            <UtensilsCrossed className="h-6 w-6" />
-          </div>
-        </div>
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-slate-900 mb-1">
+    <div className="space-y-6 max-w-4xl mx-auto">
+      {/* Шапка ресторана */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-5 py-4 flex items-center justify-between gap-4">
+        {/* Левая часть — текст */}
+        <div className="flex-1 space-y-1">
+          <h1 className="text-2xl font-semibold text-slate-900">
             {restaurant.name}
           </h1>
-          <p className="flex items-center gap-1 text-sm text-slate-500">
+
+          <div className="flex items-center gap-1 text-sm text-slate-500">
             <MapPin className="h-4 w-4" />
             <span>{restaurant.address}</span>
-          </p>
-          <p className="text-xs text-slate-400 mt-1">
-            Выберите блюда, проверьте заказ и укажите адрес доставки.
-          </p>
+          </div>
+
+        </div>
+
+        {/* Правая часть — плотный градиентный блок с иконкой */}
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-gradient-to-tr from-blue-500 via-indigo-500 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-md">
+          <UtensilsCrossed className="h-10 w-10 text-white opacity-95" />
         </div>
       </div>
 
@@ -182,10 +179,10 @@ export default function RestaurantMenuPage() {
         </div>
       )}
 
-            {/* Меню + корзина (две колонки на десктопе) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-        {/* Левая колонка: меню (занимает 2/3) */}
-        <div className="lg:col-span-2 space-y-4">
+      {/* Меню + корзина */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+        {/* Левая колонка: меню */}
+        <div className="lg:col-span-3 space-y-4">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
             <h2 className="text-lg font-semibold text-slate-900 mb-3">Меню</h2>
             {menu.length === 0 ? (
@@ -200,27 +197,38 @@ export default function RestaurantMenuPage() {
                       key={item.id}
                       className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0"
                     >
-                      {/* Левая часть: имя + описание */}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-slate-900">
-                            {item.name}
-                          </h3>
-                          {!item.is_available && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
-                              Нет в наличии
-                            </span>
+                      {/* Левая часть: картинка блюда + текст */}
+                      <div className="flex gap-3 flex-1 min-w-0">
+                        {/* Квадратная заглушка блюда */}
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden flex-shrink-0">
+                          <div className="h-full w-full bg-gradient-to-br from-orange-400/90 via-red-400/90 to-orange-500/90 flex items-center justify-center">
+                            <Pizza className="h-6 w-6 text-white opacity-95" />
+                          </div>
+                        </div>
+
+                        {/* Название + описание */}
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium text-slate-900 truncate">
+                              {item.name}
+                            </h3>
+                            {!item.is_available && (
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                                Нет в наличии
+                              </span>
+                            )}
+                          </div>
+
+                          {item.description && (
+                            <p className="text-xs sm:text-sm text-slate-600 break-words line-clamp-2">
+                              {item.description}
+                            </p>
                           )}
                         </div>
-                        {item.description && (
-                          <p className="text-sm text-slate-600 mt-1">
-                            {item.description}
-                          </p>
-                        )}
                       </div>
 
-                      {/* Правая часть: цена + кнопка добавления */}
-                      <div className="flex flex-col items-end gap-1">
+                      {/* Правая часть: цена + кнопка */}
+                      <div className="flex flex-col items-end gap-1 min-w-[130px]">
                         <span className="text-sm font-semibold text-slate-900">
                           {item.price} ₽
                         </span>
@@ -256,7 +264,7 @@ export default function RestaurantMenuPage() {
         </div>
 
         {/* Правая колонка: корзина + адрес */}
-        <div className="space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           {/* Корзина */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-3">
             <h2 className="text-lg font-semibold text-slate-900">Ваш заказ</h2>
@@ -290,7 +298,9 @@ export default function RestaurantMenuPage() {
                           {/* контрол количества */}
                           <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-slate-300 bg-slate-50">
                             <button
-                              onClick={() => setItemQuantity(item.id, qty - 1)}
+                              onClick={() =>
+                                setItemQuantity(item.id, qty - 1)
+                              }
                               className="h-6 w-6 flex items-center justify-center rounded-full border border-slate-300 text-slate-700 text-xs hover:bg-slate-100"
                               title="Уменьшить количество"
                             >
@@ -300,7 +310,9 @@ export default function RestaurantMenuPage() {
                               {qty}
                             </span>
                             <button
-                              onClick={() => setItemQuantity(item.id, qty + 1)}
+                              onClick={() =>
+                                setItemQuantity(item.id, qty + 1)
+                              }
                               className="h-6 w-6 flex items-center justify-center rounded-full bg-blue-600 text-white text-xs hover:bg-blue-700"
                               title="Увеличить количество"
                             >
