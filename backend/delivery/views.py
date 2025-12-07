@@ -28,7 +28,11 @@ def delivery_task_list(request):
     if user is None:
         return JsonResponse({'detail': 'Authentication required'}, status=401)
 
-    qs = DeliveryTask.objects.select_related('order', 'courier__user')
+    qs = DeliveryTask.objects.select_related(
+        'order__restaurant',
+        'order__client',
+        'courier__user',
+    )
 
     if user.role == User.Roles.COURIER:
         try:
@@ -43,15 +47,27 @@ def delivery_task_list(request):
 
     data = []
     for task in qs.order_by('status', '-assigned_at'):
+        order = task.order
+        client = order.client
+
+        # если в User нет phone — либо убери это поле, либо замени на своё
+        client_phone = getattr(client, "phone", "")
+        client_name = getattr(client, 'display_name', '') or client.username
+
         data.append(
             {
                 'id': task.id,
                 'order_id': task.order_id,
                 'status': task.status,
                 'courier_id': task.courier_id,
-                'client_id': task.order.client_id,
-                'restaurant_id': task.order.restaurant_id,
-                'delivery_address': task.order.delivery_address,
+                'client_id': order.client_id,
+                'client_username': client_name,
+                'client_phone': client_phone,
+                'restaurant_id': order.restaurant_id,
+                'restaurant_name': order.restaurant.name,
+                'delivery_address': order.delivery_address,
+                'order_total_price': str(order.total_price),
+                'order_created_at': order.created_at.isoformat(),
             }
         )
 

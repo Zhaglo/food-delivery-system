@@ -14,5 +14,20 @@ class User(AbstractUser):
         default=Roles.CLIENT,
     )
 
+    # Новые поля
+    display_name = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Отображаемое имя пользователя"
+    )
+
+    phone = models.CharField(
+        max_length=32,
+        blank=True,
+        null=True,
+        help_text="Номер телефона пользователя"
+    )
+
     def __str__(self):
-        return f'{self.username} ({self.role})'
+        return f'{self.display_name or self.username} ({self.role})'
