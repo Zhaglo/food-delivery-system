@@ -23,8 +23,30 @@ type Task = {
   order_created_at?: string;
 };
 
-const ACTIVE_STATUSES = ["PENDING", "ASSIGNED", "IN_PROGRESS"] as const;
+const ACTIVE_STATUSES = ["ASSIGNED", "IN_PROGRESS"] as const;
 const HISTORY_STATUSES = ["DONE"] as const;
+
+type ActiveStatus = (typeof ACTIVE_STATUSES)[number];
+
+// вычисляем следующий статус и текст кнопки
+function getNextAction(status: string):
+  | { nextStatus: "IN_PROGRESS" | "DONE"; label: string }
+  | null {
+  switch (status) {
+    case "ASSIGNED":
+      return {
+        nextStatus: "IN_PROGRESS",
+        label: "Забрал из ресторана",
+      };
+    case "IN_PROGRESS":
+      return {
+        nextStatus: "DONE",
+        label: "Заказ доставлен",
+      };
+    default:
+      return null;
+  }
+}
 
 export default function CourierTasksPage() {
   const { user } = useAuth();
@@ -49,9 +71,6 @@ export default function CourierTasksPage() {
   useEffect(() => {
     if (user?.role === "COURIER" || user?.role === "ADMIN") {
       loadTasks();
-      // автообновление, чтоб статус подтягивался
-      const id = setInterval(loadTasks, 20000);
-      return () => clearInterval(id);
     }
   }, [user]);
 
@@ -73,11 +92,18 @@ export default function CourierTasksPage() {
   }
 
   const activeTasks = useMemo(
-    () => tasks.filter((t) => ACTIVE_STATUSES.includes(t.status as any)),
+    () =>
+      tasks.filter((t) =>
+        ACTIVE_STATUSES.includes(t.status as ActiveStatus),
+      ),
     [tasks],
   );
+
   const historyTasks = useMemo(
-    () => tasks.filter((t) => HISTORY_STATUSES.includes(t.status as any)),
+    () =>
+      tasks.filter((t) =>
+        HISTORY_STATUSES.includes(t.status as any),
+      ),
     [tasks],
   );
 
@@ -107,6 +133,8 @@ export default function CourierTasksPage() {
             createdAt && !isNaN(createdAt.getTime())
               ? createdAt.toLocaleString()
               : t.order_created_at;
+
+          const action = getNextAction(t.status);
 
           return (
             <Card key={t.id}>
@@ -161,7 +189,9 @@ export default function CourierTasksPage() {
                 <span className="inline-flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   <span>
-                    {createdLabel ? `Создан: ${createdLabel}` : "Время не указано"}
+                    {createdLabel
+                      ? `Создан: ${createdLabel}`
+                      : "Время не указано"}
                   </span>
                 </span>
                 {t.order_total_price && (
@@ -171,20 +201,17 @@ export default function CourierTasksPage() {
                 )}
               </div>
 
-              {/* Кнопки смены статуса */}
-              <div className="flex flex-wrap gap-2 pt-1">
-                {["PENDING", "ASSIGNED", "IN_PROGRESS", "DONE"].map((st) => (
+              {/* ОДНА кнопка "следующий шаг" */}
+              {action && (
+                <div className="flex flex-wrap gap-2 pt-1">
                   <Button
-                    key={st}
                     size="sm"
-                    variant={st === t.status ? "ghost" : "primary"}
-                    disabled={st === t.status}
-                    onClick={() => changeStatus(t.id, st)}
+                    onClick={() => changeStatus(t.id, action.nextStatus)}
                   >
-                    {st}
+                    {action.label}
                   </Button>
-                ))}
-              </div>
+                </div>
+              )}
             </Card>
           );
         })}
