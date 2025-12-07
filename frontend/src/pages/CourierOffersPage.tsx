@@ -1,3 +1,4 @@
+// src/pages/CourierOffersPage.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
@@ -19,13 +20,19 @@ type Offer = {
   order_created_at: string;
 };
 
+const ACTIVE_TASK_STATUSES = ["ASSIGNED", "IN_PROGRESS"];
+
 export default function CourierOffersPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+
   const [offers, setOffers] = useState<Offer[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [assigningId, setAssigningId] = useState<number | null>(null);
+
+  // флаг: есть ли уже активная задача у курьера
+  const [hasActiveTask, setHasActiveTask] = useState(false);
 
   async function loadOffers() {
     try {
@@ -40,11 +47,31 @@ export default function CourierOffersPage() {
     }
   }
 
+  async function checkActiveTask() {
+    try {
+      const tasks = await api.get("/delivery/tasks/");
+      const hasActive = Array.isArray(tasks)
+        ? tasks.some((t: any) => ACTIVE_TASK_STATUSES.includes(t.status))
+        : false;
+      setHasActiveTask(hasActive);
+    } catch {
+      // если что-то пошло не так — просто считаем, что инфы нет и не блокируем
+      setHasActiveTask(false);
+    }
+  }
+
   useEffect(() => {
     if (user?.role === "COURIER") {
+      // первый загруз
       loadOffers();
+      checkActiveTask();
+
       // автообновление каждые 20 секунд
-      const id = setInterval(loadOffers, 20000);
+      const id = setInterval(() => {
+        loadOffers();
+        checkActiveTask();
+      }, 20000);
+
       return () => clearInterval(id);
     }
   }, [user]);
@@ -54,10 +81,8 @@ export default function CourierOffersPage() {
     setAssigningId(taskId);
     try {
       await api.post(`/delivery/offers/${taskId}/assign/`, {});
-      // после успешного взятия просто перезагружаем список
+      // после успешного взятия сразу идём в "Мои задачи"
       navigate("/courier/tasks");
-//       await loadOffers();
-      // можно ещё вывести тост/алерт, но пока просто оставим
     } catch (err: any) {
       alert(
         err?.data?.detail ||
@@ -68,7 +93,7 @@ export default function CourierOffersPage() {
     }
   }
 
-  if (!user || user.role !== "COURIER") {
+  if (!user || user.role !== "COURIER" && user.role !== "ADMIN") {
     return (
       <div className="text-sm text-slate-500">
         Страница доступна только пользователю с ролью COURIER.
@@ -83,8 +108,16 @@ export default function CourierOffersPage() {
         subtitle="Свободные заказы, которые вы можете взять в работу."
       />
 
+      {hasActiveTask && (
+        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-100 px-3 py-2 rounded-md">
+          У вас уже есть активная задача доставки. Завершите её, чтобы взять новый заказ.
+        </div>
+      )}
+
       {loading && (
-        <div className="text-sm text-slate-500">Загрузка доступных заказов...</div>
+        <div className="text-sm text-slate-500">
+          Загрузка доступных заказов...
+        </div>
       )}
 
       {error && (
@@ -99,6 +132,8 @@ export default function CourierOffersPage() {
           const createdLabel = isNaN(createdAt.getTime())
             ? offer.order_created_at
             : createdAt.toLocaleString();
+
+          const disabled = hasActiveTask || assigningId === offer.id;
 
           return (
             <Card key={offer.id}>
@@ -139,9 +174,13 @@ export default function CourierOffersPage() {
                 <Button
                   size="sm"
                   onClick={() => handleAssign(offer.id)}
-                  disabled={assigningId === offer.id}
+                  disabled={disabled}
                 >
-                  {assigningId === offer.id ? "Берём заказ..." : "Взять заказ"}
+                  {assigningId === offer.id
+                    ? "Берём заказ..."
+                    : hasActiveTask
+                    ? "У вас уже есть заказ"
+                    : "Взять заказ"}
                 </Button>
               </div>
             </Card>
