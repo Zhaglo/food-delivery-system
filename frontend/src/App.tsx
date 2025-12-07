@@ -6,6 +6,7 @@ import RegisterPage from "./pages/RegisterPage";
 import RestaurantsPage from "./pages/RestaurantsPage";
 import RestaurantMenuPage from "./pages/RestaurantMenuPage";
 import OrdersPage from "./pages/OrdersPage";
+import ClientOrderDetailPage from "./pages/ClientOrderDetailPage";
 import RestaurantOrdersPage from "./pages/RestaurantOrdersPage";
 import CourierTasksPage from "./pages/CourierTasksPage";
 import CourierApplicationPage from './pages/CourierApplicationPage';
@@ -229,6 +230,16 @@ function App() {
             element={
               <RequireRole allowed={["CLIENT"]}>
                 <OrdersPage />
+              </RequireRole>
+            }
+          />
+
+          {/* Детали заказа клиента */}
+          <Route
+            path="/orders/:id"
+            element={
+              <RequireRole allowed={["CLIENT"]}>
+                <ClientOrderDetailPage />
               </RequireRole>
             }
           />
