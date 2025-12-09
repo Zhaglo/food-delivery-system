@@ -13,5 +13,49 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: food_delivery_backend
+    command: python manage.py runserver 0.0.0.0:8000
+    working_dir: /app
+    volumes:
+      - ../backend:/app
+    environment:
+      DB_NAME: food_delivery_db
+      DB_USER: food_user
+      DB_PASSWORD: food_password
+      DB_HOST: db
+      DB_PORT: "5432"
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: food_delivery_frontend
+    # билдим и «зависаем», чтобы volume с dist жил
+    command: sh -c "npm install && npm run build && tail -f /dev/null"
+    working_dir: /app
+    volumes:
+      - frontend_build:/app/dist
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: food_delivery_nginx
+    volumes:
+      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - frontend_build:/usr/share/nginx/html
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+
 volumes:
   postgres_data:
+  frontend_build:

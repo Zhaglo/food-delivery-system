@@ -82,8 +82,8 @@ DATABASES = {
         'NAME': 'food_delivery_db',
         'USER': 'food_user',
         'PASSWORD': 'food_password',
-        'HOST': 'localhost',
-        'PORT': '5433',
+        'HOST': 'db',
+        'PORT': '5432',
     }
 }
 
