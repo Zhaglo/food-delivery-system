@@ -40,6 +40,8 @@ def login_view(request):
             'id': user.id,
             'username': user.username,
             'role': user.role,
+            'display_name': user.display_name,
+            'phone': user.phone,
         },
         json_dumps_params={'ensure_ascii': False},
     )
@@ -66,6 +68,8 @@ def me_view(request):
             'id': user.id,
             'username': user.username,
             'role': user.role,
+            'display_name': user.display_name,
+            'phone': user.phone,
         }, json_dumps_params={'ensure_ascii': False},
     )
 
@@ -84,6 +88,9 @@ def register_view(request):
     password2 = data.get('password2') or ''
     email = (data.get('email') or '').strip()
 
+    display_name = (data.get('display_name') or '').strip()
+    phone = (data.get('phone') or '').strip()
+
     if not username or not password or not password2:
         return JsonResponse(
             {'detail': 'username, password и password2 обязательны'},
@@ -99,12 +106,18 @@ def register_view(request):
             status=400,
         )
 
-    # создаём обычного пользователя, роль по умолчанию = CLIENT
     user = User.objects.create_user(
         username=username,
-        email=email,
+        email=email or None,
         password=password,
     )
+
+    if display_name:
+        user.display_name = display_name
+    if phone:
+        user.phone = phone
+    # роль по умолчанию = CLIENT из модели
+    user.save()
 
     return JsonResponse(
         {
@@ -112,6 +125,8 @@ def register_view(request):
             'username': user.username,
             'email': user.email,
             'role': user.role,
+            'display_name': user.display_name,
+            'phone': user.phone,
         },
         status=201,
         json_dumps_params={'ensure_ascii': False},

@@ -8,5 +8,5 @@ class UserAdmin(DjangoUserAdmin):
     fieldsets = DjangoUserAdmin.fieldsets + (
     ("Role", {"fields": ("role",)}),
     )
-    list_display = ('username', 'email', 'is_staff', 'is_superuser')
+    list_display = ('username', 'role', 'display_name', 'phone', 'email', 'is_staff', 'is_superuser')
     list_filter = ('role', 'is_staff', 'is_superuser')
