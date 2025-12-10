@@ -2,8 +2,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { Card } from "../components/Card";
 import { Link } from "react-router-dom";
-import { Clock, MapPin, User as UserIcon, ChevronDown } from "lucide-react";
+import {
+  Clock,
+  MapPin,
+  User as UserIcon,
+  ChevronDown,
+  Search,
+} from "lucide-react";
 
 type OrderItemShort = {
   id: number;
@@ -94,6 +101,36 @@ function statusBadgeClasses(status: StatusType) {
   }
 }
 
+function statusTileClasses(status: StatusType) {
+  const base =
+    "flex flex-col items-start px-3 py-2 rounded-lg border text-xs";
+  switch (status) {
+    case "NEW":
+      return `${base} bg-sky-50 border-sky-100`;
+    case "COOKING":
+      return `${base} bg-amber-50 border-amber-100`;
+    case "READY":
+      return `${base} bg-emerald-50 border-emerald-100`;
+    case "ON_DELIVERY":
+      return `${base} bg-indigo-50 border-indigo-100`;
+    case "DELIVERED":
+      return `${base} bg-green-50 border-green-100`;
+    case "CANCELLED":
+      return `${base} bg-red-50 border-red-100`;
+    default:
+      return `${base} bg-slate-50 border-slate-100`;
+  }
+}
+
+const COLUMN_HEADER_CLASSES: Record<StatusType, string> = {
+  NEW: "bg-sky-50 border-sky-100",
+  COOKING: "bg-amber-50 border-amber-100",
+  READY: "bg-emerald-50 border-emerald-100",
+  ON_DELIVERY: "bg-indigo-50 border-indigo-100",
+  DELIVERED: "bg-green-50 border-green-100",
+  CANCELLED: "bg-red-50 border-red-100",
+};
+
 function formatDateTime(iso: string) {
   try {
     return new Date(iso).toLocaleString();
@@ -125,7 +162,9 @@ export default function RestaurantOrdersPage() {
   const [myRestaurants, setMyRestaurants] = useState<MyRestaurant[]>([]);
 
   // фильтр по ресторану: "ALL" или id ресторана — ГЛОБАЛЬНЫЙ
-  const [restaurantFilter, setRestaurantFilter] = useState<"ALL" | number>("ALL");
+  const [restaurantFilter, setRestaurantFilter] = useState<"ALL" | number>(
+    "ALL",
+  );
 
   // фильтры для АКТИВНЫХ заказов (канбан)
   const [statusFilter, setStatusFilter] = useState<StatusType | "ALL">("ALL");
@@ -187,13 +226,18 @@ export default function RestaurantOrdersPage() {
   }
 
   if (!user || user.role !== "RESTAURANT") {
-    return <div>Страница доступна только пользователю с ролью RESTAURANT</div>;
+    return (
+      <div className="text-sm text-slate-500">
+        Страница доступна только пользователю с ролью RESTAURANT
+      </div>
+    );
   }
 
   // ===== общие штуки =====
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const normalizedHistorySearch = historySearch.trim().toLowerCase();
+  const hasSearch = normalizedSearch.length > 0;
 
   // сначала фильтруем заказы по ресторану (ГЛОБАЛЬНЫЙ фильтр)
   const ordersForView = useMemo(() => {
@@ -370,117 +414,75 @@ export default function RestaurantOrdersPage() {
     <div className="space-y-4">
       {/* Шапка ресторатора + глобальный фильтр по ресторану */}
       {myRestaurants.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">
-                Панель ресторатора
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Сейчас показываются заказы:{" "}
-                <span className="font-medium text-slate-900">
-                  {currentRestaurantLabel}
-                </span>
-              </p>
-            </div>
-
-            {/* переключатель ресторана в виде табов-пилюль */}
-            <div className="flex flex-wrap gap-1 sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setRestaurantFilter("ALL")}
-                className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
-                  restaurantFilter === "ALL"
-                    ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                Все рестораны
-              </button>
-              {myRestaurants.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setRestaurantFilter(r.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs border transition-colors max-w-[180px] truncate ${
-                    restaurantFilter !== "ALL" && restaurantFilter === r.id
-                      ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
-                  }`}
-                  title={r.name}
-                >
-                  {r.name}
-                </button>
-              ))}
-            </div>
+      <Card className="space-y-3">
+        {/* Верхняя строка: заголовок + селект */}
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Сейчас показываются заказы:&nbsp;
+              <span className="font-medium text-slate-900">
+                {currentRestaurantLabel}
+              </span>
+            </p>
           </div>
 
-          {/* карточка выбранного ресторана (или всех, если ALL) */}
-          {restaurantFilter === "ALL" ? (
-            <div className="grid gap-2 sm:grid-cols-2">
+          {/* Выпадающий список выбора ресторана */}
+          <div className="w-full md:w-72">
+            <select
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={restaurantFilter === "ALL" ? "ALL" : String(restaurantFilter)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setRestaurantFilter(value === "ALL" ? "ALL" : Number(value));
+              }}
+            >
+              <option value="ALL">Все рестораны</option>
               {myRestaurants.map((r) => (
-                <div
-                  key={r.id}
-                  className="text-sm p-3 rounded-lg border border-slate-200 bg-slate-50"
-                >
-                  <div className="font-medium text-slate-900 flex items-center justify-between gap-2">
-                    <span className="truncate">{r.name}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
-                      ID: {r.id}
-                    </span>
-                  </div>
-                  <div className="text-slate-500 text-xs mt-1 truncate">
-                    {r.address}
-                  </div>
-                  {r.description && (
-                    <div className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                      {r.description}
-                    </div>
-                  )}
-                </div>
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
               ))}
-            </div>
-          ) : (
-            (() => {
-              const selected = myRestaurants.find(
-                (r) => r.id === restaurantFilter,
-              );
-              if (!selected) return null;
-              return (
-                <div className="text-sm p-3 rounded-lg border border-blue-200 bg-blue-50">
-                  <div className="font-medium text-slate-900 flex items-center justify-between gap-2">
-                    <span className="truncate">{selected.name}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600 text-white">
-                      Активный ресторан
-                    </span>
-                  </div>
-                  <div className="text-slate-600 text-xs mt-1">
-                    {selected.address}
-                  </div>
-                  {selected.description && (
-                    <div className="text-[11px] text-slate-500 mt-1">
-                      {selected.description}
-                    </div>
-                  )}
-                </div>
-              );
-            })()
-          )}
+            </select>
+          </div>
         </div>
-      )}
+
+        {/* Карточка активного ресторана (кроме режима "Все рестораны") */}
+        {restaurantFilter !== "ALL" && (() => {
+          const selected = myRestaurants.find(
+            (r) => r.id === restaurantFilter,
+          );
+          if (!selected) return null;
+
+          return (
+            <div className="text-xs sm:text-sm p-3 rounded-lg border border-blue-100 bg-blue-50/60 flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-slate-900 truncate">
+                  {selected.name}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600 text-white">
+                  Активный ресторан
+                </span>
+              </div>
+              <div className="text-slate-600 truncate">
+                {selected.address}
+              </div>
+              {selected.description && (
+                <div className="text-[11px] text-slate-500 line-clamp-2">
+                  {selected.description}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </Card>
+    )}
 
       {/* Статистика по статусам */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <h2 className="text-sm font-semibold text-slate-900 mb-3">
-          Статус заказов
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
-          {STATUSES.map((st) => (
-            <div
-              key={st}
-              className="flex flex-col items-start px-3 py-2 rounded-lg bg-slate-50 border border-slate-100"
-            >
-              <span className="font-medium text-slate-700">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+          {STATUSES.filter((st) => st !== "DELIVERED").map((st) => (
+            <div key={st} className={statusTileClasses(st)}>
+              <span className="text-[11px] text-slate-600">
                 {STATUS_LABEL[st]}
               </span>
               <span className="text-lg font-semibold text-slate-900">
@@ -492,39 +494,59 @@ export default function RestaurantOrdersPage() {
       </div>
 
       {/* Фильтры / поиск для АКТИВНЫХ заказов */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-        <h2 className="text-sm font-semibold text-slate-900">Фильтрация</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <input
-            className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-            placeholder="Поиск по № заказа, клиенту, адресу или блюду"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      <Card className="space-y-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          {/* Левая часть: поиск + статус */}
+          <div className="flex-1 flex flex-col gap-3 sm:flex-row">
+            {/* Поиск */}
+            <div className="flex-1">
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400">
+                  <Search className="h-4 w-4" />
+                </span>
+                <input
+                  className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-md text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Поиск по № заказа, клиенту, адресу или блюду"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
 
-          {/* фильтр статуса — только активные статусы */}
-          <select
-            className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-            value={statusFilter}
-            onChange={(e) =>
-              setStatusFilter(e.target.value as StatusType | "ALL")
-            }
-          >
-            <option value="ALL">Все активные статусы</option>
-            {ACTIVE_STATUSES.map((st) => (
-              <option key={st} value={st}>
-                {STATUS_LABEL[st]}
-              </option>
-            ))}
-          </select>
+            {/* Статус */}
+            <div className="sm:w-56">
+              <select
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={statusFilter}
+                onChange={(e) =>
+                  setStatusFilter(e.target.value as StatusType | "ALL")
+                }
+              >
+                <option value="ALL">Все активные статусы</option>
+                {ACTIVE_STATUSES.map((st) => (
+                  <option key={st} value={st}>
+                    {STATUS_LABEL[st]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-          <div className="flex items-center text-xs text-slate-500">
-            {loading
-              ? "Загрузка данных..."
-              : `Всего заказов: ${ordersForView.length}`}
+          {/* Правая часть: статистика */}
+          <div className="md:w-52 text-right text-xs text-slate-500 space-y-0.5">
+            <div className="font-medium text-slate-700">
+              {loading
+                ? "Загрузка данных..."
+                : `Всего заказов: ${ordersForView.length}`}
+            </div>
+            {!loading && hasSearch && (
+              <div className="text-[11px] text-slate-400 truncate">
+                По запросу: “{searchQuery.trim()}”
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      </Card>
 
       {error && (
         <div className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-md">
@@ -533,7 +555,7 @@ export default function RestaurantOrdersPage() {
       )}
 
       {/* Канбан по АКТИВНЫМ статусам */}
-      <div className="flex gap-4 overflow-x-auto pb-2">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
         {ACTIVE_STATUSES.map((st) => {
           const group = groupedByStatus[st];
           const countLabel =
@@ -542,19 +564,20 @@ export default function RestaurantOrdersPage() {
           return (
             <div
               key={st}
-              className="min-w-[260px] max-w-sm flex-1 bg-slate-50 border border-slate-200 rounded-xl flex flex-col"
+              className="bg-slate-50 border border-slate-200 rounded-xl flex flex-col h-full"
             >
-              <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-700 uppercase">
+              <div
+                className={`px-3 py-2 border-b text-xs flex items-center justify-between ${COLUMN_HEADER_CLASSES[st]}`}
+              >
+                <span className="font-semibold text-slate-800 uppercase">
                   {STATUS_LABEL[st]}
                 </span>
-                <span className="text-xs text-slate-500">{countLabel}</span>
+                <span className="text-slate-500">{countLabel}</span>
               </div>
+
               <div className="p-3 space-y-3">
                 {group.length === 0 ? (
-                  <div className="text-xs text-slate-400">
-                    Заказов нет.
-                  </div>
+                  <div className="text-xs text-slate-400">Заказов нет.</div>
                 ) : (
                   group.map((o) => {
                     const nextStatuses = STATUS_FLOW[o.status as StatusType];
@@ -594,12 +617,6 @@ export default function RestaurantOrdersPage() {
                           <span>{minutesFromNow(o.created_at)}</span>
                         </div>
 
-                        <div className="text-[11px] text-slate-600 flex items-start gap-1">
-                          <MapPin className="h-3 w-3 mt-[2px]" />
-                          <span>{o.delivery_address}</span>
-                        </div>
-
-                        {/* Список блюд (если есть) */}
                         {o.items && o.items.length > 0 && (
                           <div className="bg-slate-50 rounded-md p-2 space-y-1">
                             {o.items.slice(0, 3).map((it) => (
@@ -635,7 +652,6 @@ export default function RestaurantOrdersPage() {
                           </Link>
                         </div>
 
-                        {/* Кнопки смены статуса */}
                         {nextStatuses.length > 0 && (
                           <div className="flex flex-wrap gap-1 pt-1">
                             {nextStatuses.map((next) => (
@@ -685,15 +701,20 @@ export default function RestaurantOrdersPage() {
           <div className="border-t border-slate-200 px-4 py-3 space-y-3">
             {/* фильтры для истории */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-              <input
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-                placeholder="Поиск по истории (№, клиент, адрес, блюда)"
-                value={historySearch}
-                onChange={(e) => setHistorySearch(e.target.value)}
-              />
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400">
+                  <Search className="h-4 w-4" />
+                </span>
+                <input
+                  className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-md text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Поиск по истории (№, клиент, адрес, блюда)"
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                />
+              </div>
 
               <select
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+                className="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 value={historyStatusFilter}
                 onChange={(e) =>
                   setHistoryStatusFilter(
@@ -707,7 +728,7 @@ export default function RestaurantOrdersPage() {
               </select>
 
               <select
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+                className="px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 value={historyTimeFilter}
                 onChange={(e) =>
                   setHistoryTimeFilter(e.target.value as HistoryTimeFilter)

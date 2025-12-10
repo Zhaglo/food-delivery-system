@@ -160,7 +160,6 @@ export default function RestaurantsPage() {
       <section>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filteredRestaurants.map((r) => {
-            const rating = getFakeRating(r).toFixed(1);
 
             return (
               <Link

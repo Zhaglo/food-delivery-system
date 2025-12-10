@@ -1,4 +1,3 @@
-// src/App.tsx
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -18,7 +17,7 @@ import RestaurantStatsPage from "./pages/RestaurantStatsPage";
 import { useAuth } from "./auth/AuthContext";
 import { RequireRole } from "./components/RequireRole";
 import RedirectHomeByRole from "./components/RedirectHomeByRole";
-import { UtensilsCrossed, Bike, UserCircle2, Store, Home } from "lucide-react";
+import { UtensilsCrossed, Bike, UserCircle2, Store, ListChecks, BarChart3, Github, Mail } from "lucide-react";
 
 function App() {
   const { user, logout, loading } = useAuth();
@@ -32,9 +31,9 @@ function App() {
     "inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm transition-colors";
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-100 flex flex-col">
       <header className="bg-white border-b border-slate-200">
-        <div className="max-w-5xl mx-auto flex items-center justify-between px-4 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-6">
           <div className="flex items-center gap-4">
             {/* Лого */}
             <Link
@@ -47,19 +46,7 @@ function App() {
 
             {/* Навигация */}
             <nav className="hidden sm:flex items-center gap-1 text-sm text-slate-600">
-              {!user && (
-                  <Link
-                    to="/"
-                    className={`${navLink} ${
-                      isActive("/")
-                        ? "bg-slate-100 text-slate-900"
-                        : "hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    <Home className="h-4 w-4" />
-                    <span>Главная</span>
-                  </Link>
-                )}
+
 
               {/* Клиент: рестораны + мои заказы */}
               {user?.role === "CLIENT" && (
@@ -123,6 +110,7 @@ function App() {
                         : "hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
+                    <BarChart3 className="h-4 w-4" />
                     <span>Статистика</span>
                   </Link>
                 </>
@@ -139,7 +127,7 @@ function App() {
                         : "hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >
-                    <Bike className="h-4 w-4" />
+                    <ListChecks className="h-4 w-4" />
                     <span>Доступные заказы</span>
                   </Link>
 
@@ -155,21 +143,6 @@ function App() {
                     <span>Мои задачи</span>
                   </Link>
                 </>
-              )}
-
-              {/* Логин — отдельной ссылкой (актуален для неавторизованных) */}
-              {!user && (
-                <Link
-                  to="/login"
-                  className={`${navLink} ${
-                    isActive("/login")
-                      ? "bg-slate-100 text-slate-900"
-                      : "hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <UserCircle2 className="h-4 w-4" />
-                  <span>Вход</span>
-                </Link>
               )}
             </nav>
           </div>
@@ -195,13 +168,19 @@ function App() {
               </>
             )}
             {!loading && !user && (
-              <span className="text-slate-500 text-xs">Не авторизован</span>
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-1 text-xs px-3 py-1 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                <UserCircle2 className="h-4 w-4 text-slate-400" />
+                <span>Вход</span>
+              </Link>
             )}
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
         <Routes>
           {/* Главная визитка — доступна всем */}
           <Route
@@ -316,6 +295,34 @@ function App() {
           />
         </Routes>
       </main>
+
+      <footer className="mt-4 border-t border-slate-200 bg-white">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+          <span>
+            © {new Date().getFullYear()} Food Delivery. Все права защищены.
+          </span>
+
+          <div className="flex items-center gap-4">
+            <a
+              href="https://github.com/Zhaglo/food-delivery-system"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 hover:text-slate-700"
+            >
+              <Github className="h-4 w-4" />
+              <span>GitHub</span>
+            </a>
+
+            <a
+              href="https://t.me/rockpaperscizzors"
+              className="inline-flex items-center gap-1 hover:text-slate-700"
+            >
+              <Mail className="h-4 w-4" />
+              <span>Telegram</span>
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

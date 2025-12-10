@@ -1,5 +1,6 @@
 // src/pages/CourierApplicationPage.tsx
-import { FormEvent, useState } from "react";
+import type { FormEvent } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 

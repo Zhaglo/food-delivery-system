@@ -1,5 +1,7 @@
+// src/pages/RestaurantMenuManagePage.tsx
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { Card } from "../components/Card";
 
 type MyRestaurant = {
   id: number;
@@ -129,6 +131,7 @@ export default function RestaurantMenuManagePage() {
       setNewName("");
       setNewDescription("");
       setNewPrice("");
+      setSelectedSectionId(null);
       setError(null);
     } catch (err: any) {
       setError(err?.data?.detail || "Ошибка добавления позиции");
@@ -190,7 +193,7 @@ export default function RestaurantMenuManagePage() {
     }
   }
 
-    async function handleDeleteSection(id: number) {
+  async function handleDeleteSection(id: number) {
     if (!selectedRestaurantId) return;
     if (!confirm("Удалить этот раздел? Блюда останутся без раздела.")) return;
 
@@ -299,7 +302,7 @@ export default function RestaurantMenuManagePage() {
       return sortDir === "asc" ? cmp : -cmp;
     });
 
-    function renderMenuItem(item: MenuItem) {
+  function renderMenuItem(item: MenuItem) {
     const section = item.section_id
       ? sections.find((s) => s.id === item.section_id)
       : null;
@@ -372,31 +375,38 @@ export default function RestaurantMenuManagePage() {
       );
     }
 
-    // обычный (не в режиме редактирования) вид
+    // обычный вид
     return (
       <div
         key={item.id}
-        className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2 last:border-0 last:pb-0 text-sm gap-2"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-2 last:border-0 last:pb-0 text-sm"
       >
-        <div>
-          <div className="font-medium text-slate-900">
-            {item.name}{" "}
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-slate-900 truncate">
+              {item.name}
+            </span>
+            {section && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                {section.name}
+              </span>
+            )}
             {!item.is_available && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
                 выключено
               </span>
             )}
           </div>
 
           {item.description && (
-            <div className="text-xs text-slate-500">
+            <div className="text-xs text-slate-500 line-clamp-2">
               {item.description}
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-slate-900">
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="text-sm font-semibold text-slate-900 min-w-[72px] text-right">
             {item.price} ₽
           </div>
           <button
@@ -431,57 +441,62 @@ export default function RestaurantMenuManagePage() {
   const selectedRestaurant = restaurants.find((r) => r.id === selectedRestaurantId);
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <h1 className="text-lg font-semibold text-slate-900 mb-2">
-          Управление меню ресторана
-        </h1>
-
-        {restaurants.length === 0 ? (
-          <div className="text-sm text-slate-500">
-            У вас пока нет ресторанов. После одобрения заявки ресторан появится здесь.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {restaurants.length > 1 && (
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700">
-                  Выберите ресторан
-                </label>
-                <select
-                  className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-                  value={selectedRestaurantId ?? ""}
-                  onChange={(e) =>
-                    setSelectedRestaurantId(
-                      e.target.value ? Number(e.target.value) : null,
-                    )
-                  }
-                >
-                  {restaurants.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
+    <div className="space-y-5 max-w-7xl mx-auto">
+      {/* Шапка управления меню */}
+      <Card className="space-y-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900">
+              Управление меню
+            </h1>
             {selectedRestaurant && (
-              <div className="text-xs text-slate-500">
-                <div className="font-medium text-slate-900">
+              <p className="text-xs text-slate-500 mt-1">
+                Ресторан:&nbsp;
+                <span className="font-medium text-slate-900">
                   {selectedRestaurant.name}
-                </div>
-                <div>{selectedRestaurant.address}</div>
-                {selectedRestaurant.description && (
-                  <div className="mt-1 text-slate-400">
-                    {selectedRestaurant.description}
-                  </div>
-                )}
+                </span>
+              </p>
+            )}
+            {!selectedRestaurant && restaurants.length === 0 && (
+              <p className="text-xs text-slate-500 mt-1">
+                У вас пока нет ресторанов. После одобрения заявки ресторан появится здесь.
+              </p>
+            )}
+          </div>
+
+          {/* Выбор ресторана, если их несколько */}
+          {restaurants.length > 1 && (
+            <div className="w-full md:w-72">
+              <select
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={selectedRestaurantId ?? ""}
+                onChange={(e) =>
+                  setSelectedRestaurantId(
+                    e.target.value ? Number(e.target.value) : null,
+                  )
+                }
+              >
+                {restaurants.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {selectedRestaurant && (
+          <div className="text-xs text-slate-500 space-y-0.5">
+            <div>{selectedRestaurant.address}</div>
+            {selectedRestaurant.description && (
+              <div className="text-slate-400">
+                {selectedRestaurant.description}
               </div>
             )}
           </div>
         )}
-      </div>
+      </Card>
 
       {error && (
         <div className="text-sm text-red-600 bg-red-50 border border-red-100 px-3 py-2 rounded-md">
@@ -491,7 +506,7 @@ export default function RestaurantMenuManagePage() {
 
       {/* Разделы меню */}
       {selectedRestaurantId && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
+        <Card className="space-y-3">
           <h2 className="text-sm font-semibold text-slate-900">
             Разделы меню
           </h2>
@@ -536,54 +551,59 @@ export default function RestaurantMenuManagePage() {
             />
             <button
               onClick={handleCreateSection}
-              className="inline-flex justify-center items-center px-4 py-2 rounded-md bg-slate-800 text-white text-sm font-medium hover:bg-slate-900 transition-colors"
+              className="inline-flex justify-center items-center px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
             >
               Добавить раздел
             </button>
           </div>
-        </div>
+        </Card>
       )}
 
+      {/* Добавление новой позиции */}
       {selectedRestaurantId && (
-        <>
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Добавить позицию
-            </h2>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <input
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-                placeholder="Название"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-              />
-              <input
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-                placeholder="Цена, ₽"
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
-              />
-              <input
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm sm:col-span-1"
-                placeholder="Описание (необязательно)"
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-              />
-              <select
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-                value={selectedSectionId ?? ""}
-                onChange={(e) =>
-                  setSelectedSectionId(e.target.value ? Number(e.target.value) : null)
-                }
-              >
-                <option value="">Без раздела</option>
-                {sections.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <Card className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Добавить позицию
+          </h2>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            {/* Название (шире) */}
+            <input
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm md:col-span-2"
+              placeholder="Название"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            {/* Цена */}
+            <input
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+              placeholder="Цена, ₽"
+              value={newPrice}
+              onChange={(e) => setNewPrice(e.target.value)}
+            />
+            {/* Описание */}
+            <input
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm md:col-span-2"
+              placeholder="Описание (необязательно)"
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+            />
+            {/* Раздел */}
+            <select
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+              value={selectedSectionId ?? ""}
+              onChange={(e) =>
+                setSelectedSectionId(e.target.value ? Number(e.target.value) : null)
+              }
+            >
+              <option value="">Без раздела</option>
+              {sections.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex justify-end">
             <button
               onClick={handleAddItem}
               disabled={saving}
@@ -592,117 +612,137 @@ export default function RestaurantMenuManagePage() {
               {saving ? "Сохранение..." : "Добавить в меню"}
             </button>
           </div>
+        </Card>
+      )}
 
-          {/* Панель фильтров / поиска / сортировки */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Фильтрация и поиск
-            </h2>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-              <input
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-                placeholder="Поиск по названию или описанию"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <select
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-                value={filterSectionId}
-                onChange={(e) => setFilterSectionId(e.target.value)}
-              >
-                <option value="all">Все разделы</option>
-                <option value="no-section">Без раздела</option>
-                {sections.map((s) => (
-                  <option key={s.id} value={s.id.toString()}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="px-3 py-2 border border-slate-300 rounded-md text-sm"
-                value={filterAvailability}
-                onChange={(e) =>
-                  setFilterAvailability(
-                    e.target.value as "all" | "available" | "unavailable",
-                  )
-                }
-              >
-                <option value="all">Доступность: все</option>
-                <option value="available">Только доступные</option>
-                <option value="unavailable">Только выключенные</option>
-              </select>
-              <div className="flex items-center gap-2">
+      {/* Панель фильтров / поиска / сортировки */}
+      {selectedRestaurantId && (
+        <Card className="space-y-3">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            {/* Левая часть: все контролы */}
+            <div className="flex-1">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                <input
+                  className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+                  placeholder="Поиск по названию или описанию"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+
                 <select
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm"
-                  value={sortBy}
-                  onChange={(e) =>
-                    setSortBy(e.target.value as "name" | "price")
-                  }
+                  className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+                  value={filterSectionId}
+                  onChange={(e) => setFilterSectionId(e.target.value)}
                 >
-                  <option value="name">Сортировать по названию</option>
-                  <option value="price">Сортировать по цене</option>
+                  <option value="all">Все разделы</option>
+                  <option value="no-section">Без раздела</option>
+                  {sections.map((s) => (
+                    <option key={s.id} value={s.id.toString()}>
+                      {s.name}
+                    </option>
+                  ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSortDir((prev) => (prev === "asc" ? "desc" : "asc"))
+
+                <select
+                  className="px-3 py-2 border border-slate-300 rounded-md text-sm"
+                  value={filterAvailability}
+                  onChange={(e) =>
+                    setFilterAvailability(
+                      e.target.value as "all" | "available" | "unavailable",
+                    )
                   }
-                  className="px-2 py-2 border border-slate-300 rounded-md text-xs"
-                  title="Сменить направление сортировки"
                 >
-                  {sortDir === "asc" ? "↑" : "↓"}
-                </button>
+                  <option value="all">Доступность: все</option>
+                  <option value="available">Только доступные</option>
+                  <option value="unavailable">Только выключенные</option>
+                </select>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm"
+                    value={sortBy}
+                    onChange={(e) =>
+                      setSortBy(e.target.value as "name" | "price")
+                    }
+                  >
+                    <option value="name">Сортировать по названию</option>
+                    <option value="price">Сортировать по цене</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"))
+                    }
+                    className="px-2 py-2 border border-slate-300 rounded-md text-xs"
+                    title="Сменить направление сортировки"
+                  >
+                    {sortDir === "asc" ? "↑" : "↓"}
+                  </button>
+                </div>
               </div>
             </div>
 
-            <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-              <input
-                type="checkbox"
-                className="rounded border-slate-300"
-                checked={groupBySection}
-                onChange={(e) => setGroupBySection(e.target.checked)}
-              />
-              <span>Группировать по разделам</span>
-            </label>
-          </div>
+            {/* Правая часть: чекбокс + статистика */}
+            <div className="md:w-56 text-right text-xs text-slate-500 space-y-1.5">
+              <label className="inline-flex items-center justify-end gap-2 text-xs text-slate-700">
+                <span>Группировать по разделам</span>
+                <input
+                  type="checkbox"
+                  className="rounded border-slate-300"
+                  checked={groupBySection}
+                  onChange={(e) => setGroupBySection(e.target.checked)}
+                />
+              </label>
 
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-            <h2 className="text-sm font-semibold text-slate-900 mb-2">
-              Текущее меню
-            </h2>
-            {loading ? (
-              <div className="text-sm text-slate-500">Загрузка меню...</div>
-            ) : filteredAndSortedMenu.length === 0 ? (
-              <div className="text-sm text-slate-500">
-                Ничего не найдено по выбранным фильтрам.
+              <div className="font-medium text-slate-700">
+                {loading
+                  ? "Загрузка меню..."
+                  : `Показано позиций: ${filteredAndSortedMenu.length}`}
               </div>
-            ) : groupBySection ? (
-              <div className="space-y-4">
-                {sectionsForGrouping.map((sec) => {
-                  const items = filteredAndSortedMenu.filter(
-                    (item) => (item.section_id ?? null) === sec.id,
-                  );
-                  if (items.length === 0) return null;
 
-                  return (
-                    <div key={sec.id ?? "no-section"} className="space-y-2">
-                      <div className="text-xs font-semibold text-slate-500 uppercase">
-                        {sec.name}
-                      </div>
-                      <div className="space-y-2">
-                        {items.map((item) => renderMenuItem(item))}
-                      </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Текущее меню */}
+      {selectedRestaurantId && (
+        <Card>
+          <h2 className="text-sm font-semibold text-slate-900 mb-2">
+            Текущее меню
+          </h2>
+          {loading ? (
+            <div className="text-sm text-slate-500">Загрузка меню...</div>
+          ) : filteredAndSortedMenu.length === 0 ? (
+            <div className="text-sm text-slate-500">
+              Ничего не найдено по выбранным фильтрам.
+            </div>
+          ) : groupBySection ? (
+            <div className="space-y-4">
+              {sectionsForGrouping.map((sec) => {
+                const items = filteredAndSortedMenu.filter(
+                  (item) => (item.section_id ?? null) === sec.id,
+                );
+                if (items.length === 0) return null;
+
+                return (
+                  <div key={sec.id ?? "no-section"} className="space-y-2">
+                    <div className="text-xs font-semibold text-indigo-600">
+                      {sec.name}
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {filteredAndSortedMenu.map((item) => renderMenuItem(item))}
-              </div>
-            )}
-          </div>
-        </>
+                    <div className="space-y-2">
+                      {items.map((item) => renderMenuItem(item))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredAndSortedMenu.map((item) => renderMenuItem(item))}
+            </div>
+          )}
+        </Card>
       )}
     </div>
   );

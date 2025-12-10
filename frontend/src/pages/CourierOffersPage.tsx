@@ -102,10 +102,9 @@ export default function CourierOffersPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title="Доступные заказы для доставки"
-        subtitle="Свободные заказы, которые вы можете взять в работу."
       />
 
       {hasActiveTask && (

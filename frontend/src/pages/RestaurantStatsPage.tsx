@@ -64,7 +64,7 @@ type PeriodType = "today" | "7d" | "30d" | "all";
 function formatDateLabel(iso: string) {
   if (!iso) return "";
   if (iso.length === 10) {
-    const [y, m, d] = iso.split("-");
+    const [_y, m, d] = iso.split("-");
     return `${d}.${m}`;
   }
   try {
@@ -380,7 +380,7 @@ export default function RestaurantStatsPage() {
                   <YAxis allowDecimals={false} />
                   <Tooltip
                     formatter={(value) => [String(value), "Заказы"]}
-                    labelFormatter={(label) => "День недели"}
+                    labelFormatter={(_label) => "День недели"}
                   />
                   <Bar dataKey="orders_count" name="Заказы" fill="#0ea5e9" />
                 </BarChart>

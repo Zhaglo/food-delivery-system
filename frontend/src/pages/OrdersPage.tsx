@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { PageHeader } from "../components/PageHeader";
 import { Card } from "../components/Card";
 import { StatusBadge } from "../components/StatusBadge";
 import { ChevronDown, Clock, MapPin, UtensilsCrossed } from "lucide-react";
@@ -173,7 +172,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 max-w-4xl mx-auto">
 
       {loading && (
         <div className="text-sm text-slate-500">Загрузка...</div>

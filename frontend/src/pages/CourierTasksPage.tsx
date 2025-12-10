@@ -108,10 +108,9 @@ export default function CourierTasksPage() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title="Задачи курьера"
-        subtitle="Активные задания и история доставок."
       />
 
       {loading && (

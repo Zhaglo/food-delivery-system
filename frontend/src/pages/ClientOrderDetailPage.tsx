@@ -81,7 +81,7 @@ export default function ClientOrderDetailPage() {
     : createdAt.toLocaleString();
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 max-w-4xl mx-auto">
       {/* Наверху: маленькая ссылка назад + заголовок с бейджем статуса */}
       <div className="space-y-2">
         <Link

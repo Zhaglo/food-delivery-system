@@ -144,7 +144,7 @@ export default function RestaurantOrderDetailPage() {
   const nextStatuses = STATUS_FLOW[statusTyped] || [];
 
   return (
-    <div className="space-y-4">
+    <div className="pace-y-6 max-w-4xl mx-auto">
       {/* Заголовок + назад */}
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold text-slate-900 flex items-center gap-2">
@@ -203,7 +203,7 @@ export default function RestaurantOrderDetailPage() {
         </div>
 
         <div className="text-xs text-slate-500">
-          Клиент ID: {order.client_id} · Ресторан ID: {order.restaurant_id}
+          Клиент ID: {order.client_id}
         </div>
 
         {/* Быстрые действия по смене статуса */}
