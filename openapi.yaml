@@ -1,0 +1,1327 @@
+openapi: 3.0.3
+info:
+  title: Restaurant Order Management API
+  version: 1.0.0
+  description: |
+    OpenAPI-спецификация REST API серверной части системы управления заказами
+    в ресторанном бизнесе. Авторизация реализована через Django session cookie.
+servers:
+  - url: http://localhost
+    description: Локальный запуск через Nginx / Docker
+  - url: http://localhost:8000
+    description: Локальный запуск Django напрямую
+
+tags:
+  - name: Auth
+    description: Регистрация, вход, выход и получение текущего пользователя
+  - name: Restaurants
+    description: Рестораны, заявки на подключение и статистика
+  - name: Menu
+    description: Управление позициями меню ресторана
+  - name: Menu Sections
+    description: Управление разделами меню ресторана
+  - name: Orders
+    description: Создание, просмотр и изменение статуса заказов
+  - name: Delivery
+    description: Задачи доставки, офферы курьеров и заявки на подключение
+
+paths:
+  /api/auth/login/:
+    post:
+      tags: [Auth]
+      summary: Авторизация пользователя
+      description: Создаёт Django-сессию при корректных учётных данных.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: client1
+              password: password123
+      responses:
+        '200':
+          description: Пользователь успешно авторизован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Неверные учётные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/auth/logout/:
+    post:
+      tags: [Auth]
+      summary: Завершение пользовательской сессии
+      responses:
+        '200':
+          description: Пользователь успешно вышел из системы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+              example:
+                detail: Logged out
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/auth/me/:
+    get:
+      tags: [Auth]
+      summary: Получение данных текущего пользователя
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Данные текущего пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/register/:
+    post:
+      tags: [Auth]
+      summary: Регистрация клиента
+      description: Создаёт пользователя с ролью CLIENT по умолчанию.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              username: client1
+              password: password123
+              password2: password123
+              email: client@example.com
+              display_name: Иван
+              phone: '+79990000000'
+      responses:
+        '201':
+          description: Пользователь успешно зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRegisterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/restaurants/:
+    get:
+      tags: [Restaurants]
+      summary: Получение списка ресторанов
+      responses:
+        '200':
+          description: Список ресторанов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RestaurantSummary'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/restaurants/my/:
+    get:
+      tags: [Restaurants]
+      summary: Получение ресторанов текущего владельца
+      description: Доступно роли RESTAURANT или ADMIN.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Список ресторанов пользователя
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RestaurantSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/restaurants/{restaurant_id}/menu/:
+    get:
+      tags: [Restaurants]
+      summary: Получение меню ресторана
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Ресторан и его меню
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantMenuResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/restaurants/apply/:
+    post:
+      tags: [Restaurants]
+      summary: Создание заявки на подключение ресторана
+      description: Может вызываться как гостем, так и авторизованным пользователем.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestaurantApplicationRequest'
+            example:
+              restaurant_name: Test Restaurant
+              address: Москва, ул. Примерная, 1
+              description: Семейное кафе
+              contact_name: Иван Иванов
+              contact_phone: '+79990000000'
+              comment: Хотим подключиться
+      responses:
+        '201':
+          description: Заявка успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantApplicationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/restaurants/{restaurant_id}/menu/manage/:
+    post:
+      tags: [Menu]
+      summary: Создание позиции меню
+      description: Доступно владельцу ресторана или администратору.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuItemCreateRequest'
+            example:
+              name: Пицца Маргарита
+              description: Томатный соус, моцарелла
+              price: '599.00'
+              is_available: true
+              section_id: 1
+      responses:
+        '201':
+          description: Позиция меню создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/restaurants/{restaurant_id}/menu/manage/{item_id}/:
+    patch:
+      tags: [Menu]
+      summary: Изменение позиции меню
+      description: Доступно владельцу ресторана или администратору.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+        - $ref: '#/components/parameters/MenuItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuItemUpdateRequest'
+            example:
+              price: '649.00'
+              is_available: false
+      responses:
+        '200':
+          description: Позиция меню обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuItemResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+    delete:
+      tags: [Menu]
+      summary: Удаление позиции меню
+      description: Доступно владельцу ресторана или администратору.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+        - $ref: '#/components/parameters/MenuItemId'
+      responses:
+        '200':
+          description: Позиция меню удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+              example:
+                detail: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/restaurants/{restaurant_id}/sections/:
+    get:
+      tags: [Menu Sections]
+      summary: Получение разделов меню ресторана
+      description: Доступно владельцу ресторана или администратору.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      responses:
+        '200':
+          description: Список разделов меню
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MenuSectionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Menu Sections]
+      summary: Создание раздела меню ресторана
+      description: Доступно владельцу ресторана или администратору.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuSectionCreateRequest'
+            example:
+              name: Пицца
+              ordering: 1
+      responses:
+        '201':
+          description: Раздел меню создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuSectionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/restaurants/{restaurant_id}/sections/{section_id}/:
+    patch:
+      tags: [Menu Sections]
+      summary: Обновление раздела меню
+      description: Доступно владельцу ресторана или администратору.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+        - $ref: '#/components/parameters/MenuSectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MenuSectionUpdateRequest'
+            example:
+              name: Горячие блюда
+              ordering: 2
+      responses:
+        '200':
+          description: Раздел меню обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MenuSectionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+    delete:
+      tags: [Menu Sections]
+      summary: Удаление раздела меню
+      description: Доступно владельцу ресторана или администратору.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+        - $ref: '#/components/parameters/MenuSectionId'
+      responses:
+        '200':
+          description: Раздел меню удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailResponse'
+              example:
+                detail: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/restaurants/{restaurant_id}/stats/:
+    get:
+      tags: [Restaurants]
+      summary: Получение статистики ресторана
+      description: Доступно владельцу ресторана или администратору.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantId'
+        - name: period
+          in: query
+          required: false
+          description: Период агрегации статистики
+          schema:
+            type: string
+            enum: [today, 7d, 30d, all]
+            default: 7d
+      responses:
+        '200':
+          description: Статистика ресторана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestaurantStatsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/orders/:
+    get:
+      tags: [Orders]
+      summary: Получение списка заказов
+      description: |
+        Клиент видит свои заказы, ресторан — заказы своего ресторана,
+        курьер — заказы по своим доставкам, администратор — все заказы.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Список заказов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Orders]
+      summary: Создание заказа клиентом
+      description: Доступно только пользователям с ролью CLIENT.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+            example:
+              restaurant_id: 1
+              delivery_address: Москва, ул. Примерная, 10
+              items:
+                - menu_item_id: 7
+                  quantity: 2
+                - menu_item_id: 9
+                  quantity: 1
+      responses:
+        '201':
+          description: Заказ создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/orders/{order_id}/:
+    get:
+      tags: [Orders]
+      summary: Получение деталей заказа
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Детальная информация о заказе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/orders/{order_id}/status/:
+    patch:
+      tags: [Orders]
+      summary: Изменение статуса заказа
+      description: Доступно владельцу ресторана или администратору. При статусе ON_DELIVERY создаётся задача доставки.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderStatusUpdateRequest'
+            example:
+              status: ON_DELIVERY
+      responses:
+        '200':
+          description: Статус заказа изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusChangeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/delivery/tasks/:
+    get:
+      tags: [Delivery]
+      summary: Получение задач доставки текущего курьера или администратора
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Список задач доставки
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryTaskResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/delivery/tasks/{task_id}/status/:
+    patch:
+      tags: [Delivery]
+      summary: Изменение статуса задачи доставки
+      description: Доступно назначенному курьеру или администратору. Статус заказа синхронизируется со статусом доставки.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryStatusUpdateRequest'
+            example:
+              status: IN_PROGRESS
+      responses:
+        '200':
+          description: Статус задачи доставки изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusChangeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/delivery/offers/:
+    get:
+      tags: [Delivery]
+      summary: Получение свободных офферов доставки
+      description: Доступно активным курьерам и администраторам.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Список свободных задач доставки
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryOfferResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/delivery/offers/{task_id}/assign/:
+    post:
+      tags: [Delivery]
+      summary: Принятие свободной задачи доставки курьером
+      description: Курьер может взять задачу, если активен и не имеет другой активной доставки.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Задача доставки назначена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryAssignResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+  /api/delivery/courier/apply/:
+    post:
+      tags: [Delivery]
+      summary: Создание заявки на подключение курьера
+      description: Может вызываться как гостем, так и авторизованным пользователем.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CourierApplicationRequest'
+            example:
+              full_name: Пётр Петров
+              phone: '+79991112233'
+              vehicle_type: bicycle
+              comment: Готов работать по вечерам
+      responses:
+        '201':
+          description: Заявка курьера создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CourierApplicationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sessionid
+      description: Django session cookie, выдаётся после успешного входа.
+
+  parameters:
+    RestaurantId:
+      name: restaurant_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    MenuItemId:
+      name: item_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    MenuSectionId:
+      name: section_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  responses:
+    BadRequest:
+      description: Некорректный JSON или неверные входные данные
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Пользователь не авторизован
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Недостаточно прав для выполнения операции
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Запрошенный объект не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    MethodNotAllowed:
+      description: HTTP-метод не поддерживается
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+          example: Forbidden
+
+    DetailResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+
+    RegisterRequest:
+      type: object
+      required: [username, password, password2]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        password2:
+          type: string
+          format: password
+        email:
+          type: string
+          format: email
+          nullable: true
+        display_name:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+
+    UserSessionResponse:
+      type: object
+      required: [id, username, role]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        display_name:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+
+    UserRegisterResponse:
+      allOf:
+        - $ref: '#/components/schemas/UserSessionResponse'
+        - type: object
+          properties:
+            email:
+              type: string
+              format: email
+              nullable: true
+
+    UserRole:
+      type: string
+      enum: [CLIENT, RESTAURANT, COURIER, ADMIN]
+
+    RestaurantSummary:
+      type: object
+      required: [id, name, address]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        address:
+          type: string
+        description:
+          type: string
+          nullable: true
+
+    RestaurantMenuResponse:
+      type: object
+      required: [restaurant, menu]
+      properties:
+        restaurant:
+          type: object
+          required: [id, name, address]
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            address:
+              type: string
+        menu:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicMenuItemResponse'
+
+    PublicMenuItemResponse:
+      type: object
+      required: [id, name, price, is_available]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        price:
+          type: string
+          example: '599.00'
+        section_id:
+          type: integer
+          nullable: true
+        is_available:
+          type: boolean
+
+    RestaurantApplicationRequest:
+      type: object
+      required: [restaurant_name, address, contact_name, contact_phone]
+      properties:
+        restaurant_name:
+          type: string
+        address:
+          type: string
+        description:
+          type: string
+          nullable: true
+        contact_name:
+          type: string
+        contact_phone:
+          type: string
+        comment:
+          type: string
+          nullable: true
+
+    RestaurantApplicationResponse:
+      type: object
+      required: [id, status, restaurant_name, contact_name, contact_phone]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        restaurant_name:
+          type: string
+        contact_name:
+          type: string
+        contact_phone:
+          type: string
+
+    MenuItemCreateRequest:
+      type: object
+      required: [name, price]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        price:
+          type: string
+          example: '599.00'
+        is_available:
+          type: boolean
+          default: true
+        section_id:
+          type: integer
+          nullable: true
+
+    MenuItemUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: string
+          example: '649.00'
+        is_available:
+          type: boolean
+        section_id:
+          type: integer
+          nullable: true
+
+    MenuItemResponse:
+      type: object
+      required: [id, name, price, is_available]
+      properties:
+        id:
+          type: integer
+        section_id:
+          type: integer
+          nullable: true
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        price:
+          type: string
+          example: '599.00'
+        is_available:
+          type: boolean
+
+    MenuSectionCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        ordering:
+          type: integer
+          default: 0
+
+    MenuSectionUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        ordering:
+          type: integer
+
+    MenuSectionResponse:
+      type: object
+      required: [id, name, ordering]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        ordering:
+          type: integer
+
+    RestaurantStatsResponse:
+      type: object
+      required: [period, from, to, totals, status_counts, top_items, by_day, orders_by_weekday]
+      properties:
+        period:
+          type: string
+          enum: [today, 7d, 30d, all]
+        from:
+          type: string
+          format: date-time
+          nullable: true
+        to:
+          type: string
+          format: date-time
+        totals:
+          type: object
+          required: [orders_count, delivered_count, cancelled_count, revenue, avg_check]
+          properties:
+            orders_count:
+              type: integer
+            delivered_count:
+              type: integer
+            cancelled_count:
+              type: integer
+            revenue:
+              type: string
+              example: '12500.00'
+            avg_check:
+              type: string
+              example: '833.33'
+        status_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        top_items:
+          type: array
+          items:
+            type: object
+            required: [menu_item_id, name, quantity, revenue]
+            properties:
+              menu_item_id:
+                type: integer
+              name:
+                type: string
+              quantity:
+                type: integer
+              revenue:
+                type: string
+        by_day:
+          type: array
+          items:
+            type: object
+            required: [date, orders_count, revenue]
+            properties:
+              date:
+                type: string
+                format: date
+              orders_count:
+                type: integer
+              revenue:
+                type: string
+        orders_by_weekday:
+          type: array
+          items:
+            type: object
+            required: [weekday, weekday_display, orders_count, revenue]
+            properties:
+              weekday:
+                type: integer
+              weekday_display:
+                type: string
+              orders_count:
+                type: integer
+              revenue:
+                type: string
+
+    OrderCreateRequest:
+      type: object
+      required: [restaurant_id, delivery_address, items]
+      properties:
+        restaurant_id:
+          type: integer
+        delivery_address:
+          type: string
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItemCreateRequest'
+
+    OrderItemCreateRequest:
+      type: object
+      required: [menu_item_id]
+      properties:
+        menu_item_id:
+          type: integer
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+
+    OrderStatus:
+      type: string
+      enum: [NEW, COOKING, READY, ON_DELIVERY, DELIVERED, CANCELLED]
+
+    DeliveryTaskStatus:
+      type: string
+      enum: [PENDING, ASSIGNED, IN_PROGRESS, DONE]
+
+    OrderStatusUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+
+    DeliveryStatusUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/DeliveryTaskStatus'
+
+    OrderItemResponse:
+      type: object
+      required: [id, menu_item_id, name, quantity, price, line_total]
+      properties:
+        id:
+          type: integer
+        menu_item_id:
+          type: integer
+        name:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: string
+          example: '599.00'
+        line_total:
+          type: string
+          example: '1198.00'
+
+    OrderResponse:
+      type: object
+      required: [id, status, client_id, restaurant_id, restaurant_name, delivery_address, total_price, created_at, items]
+      properties:
+        id:
+          type: integer
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        client_id:
+          type: integer
+        restaurant_id:
+          type: integer
+        restaurant_name:
+          type: string
+        delivery_address:
+          type: string
+        total_price:
+          type: string
+          example: '1797.00'
+        created_at:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemResponse'
+
+    OrderDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/OrderResponse'
+        - type: object
+          properties:
+            restaurant_address:
+              type: string
+
+    StatusChangeResponse:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+
+    DeliveryTaskResponse:
+      type: object
+      required: [id, order_id, status, client_id, client_username, restaurant_id, restaurant_name, delivery_address, order_total_price, order_created_at]
+      properties:
+        id:
+          type: integer
+        order_id:
+          type: integer
+        status:
+          $ref: '#/components/schemas/DeliveryTaskStatus'
+        courier_id:
+          type: integer
+          nullable: true
+        client_id:
+          type: integer
+        client_username:
+          type: string
+        client_phone:
+          type: string
+          nullable: true
+        restaurant_id:
+          type: integer
+        restaurant_name:
+          type: string
+        delivery_address:
+          type: string
+        order_total_price:
+          type: string
+        order_created_at:
+          type: string
+          format: date-time
+
+    DeliveryOfferResponse:
+      type: object
+      required: [id, order_id, status, restaurant_id, restaurant_name, client_id, delivery_address, order_total_price, order_created_at]
+      properties:
+        id:
+          type: integer
+        order_id:
+          type: integer
+        status:
+          $ref: '#/components/schemas/DeliveryTaskStatus'
+        restaurant_id:
+          type: integer
+        restaurant_name:
+          type: string
+        client_id:
+          type: integer
+        delivery_address:
+          type: string
+        order_total_price:
+          type: string
+        order_created_at:
+          type: string
+          format: date-time
+
+    DeliveryAssignResponse:
+      type: object
+      required: [id, status, order_id, delivery_address]
+      properties:
+        id:
+          type: integer
+        status:
+          $ref: '#/components/schemas/DeliveryTaskStatus'
+        order_id:
+          type: integer
+        courier_id:
+          type: integer
+          nullable: true
+        delivery_address:
+          type: string
+
+    CourierApplicationRequest:
+      type: object
+      required: [full_name, phone]
+      properties:
+        full_name:
+          type: string
+        phone:
+          type: string
+        vehicle_type:
+          type: string
+          nullable: true
+        comment:
+          type: string
+          nullable: true
+
+    CourierApplicationResponse:
+      type: object
+      required: [id, status, full_name, phone]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        full_name:
+          type: string
+        phone:
+          type: string
